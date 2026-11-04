@@ -1,4 +1,5 @@
 import { askJson, hasApiKey, modelInfo } from './claude.js';
+import { FAMILY_ORDER, ensurePlan, modeInfo, modelList } from './modes.js';
 
 /**
  * Every call where Opus thinks *about* the activity rather than taking part:
@@ -6,7 +7,7 @@ import { askJson, hasApiKey, modelInfo } from './claude.js';
  *   trainContext()  — turns the educator's context files into a class brief
  *   analyseRound()  — reads a round's transcripts and writes what the AI should
  *                     do differently next round
- *   buildOverview() — writes the story of the four rounds for the animated
+ *   buildOverview() — writes the story of the activity for the animated
  *                     overview and the report
  *
  * All three use the latest Opus at high effort. All three degrade to a plain,
@@ -182,7 +183,7 @@ export async function analyseRound({ activity, round, previousGuidance = [] }) {
   }
 
   const prompt = [
-    `This is round ${round.number} of 4 of "Human or Not?", a classroom Turing test, run by an educator`,
+    `This is round ${round.number} of ${ensurePlan(activity).plan.length} of "Human or Not?", a classroom Turing test, run by an educator`,
     `with the class "${activity.className}" (activity: "${activity.name}"). Each student chatted for`,
     `${Math.round(activity.durationSec / 60)} minutes with either a classmate or an AI playing a classmate,`,
     'then guessed which. The AI is trying to pass as a classmate; the students are trying to catch it.',
@@ -251,22 +252,64 @@ const OVERVIEW_SCHEMA = {
   },
 };
 
+/** How this activity was run, in plain words, for Opus. */
+export function describeActivity(activity) {
+  ensurePlan(activity);
+  const mode = modeInfo(activity.mode);
+  const n = activity.rounds.length;
+  const perRound = activity.rounds.map((r) => `round ${r.number}: ${modelList(r.models)}`).join('; ');
+  if (mode.id === 'open') {
+    return {
+      setup: [
+        `Open play: ${n} round${n === 1 ? '' : 's'}. The AI did NOT learn between rounds — every round it worked`,
+        'from the same class brief. Instead the educator chose which Claude models played each round',
+        `(${perRound}). Any change across rounds comes from the students and the model mix, not from learning.`,
+      ].join('\n'),
+      impact: 'modelImpact: {headline, body ≤ 60 words}: what the choice of models did — which model was hardest to catch, and what changed when the mix changed. Read honestly from the numbers.',
+      story: 'story: 3–5 beats ({heading, body}, body ≤ 45 words) telling what happened across the rounds: how students got better (or not) at spotting the AI, what gave it away, which models held up.',
+    };
+  }
+  const base = 'In rounds 1–3 the AI partners were a mix of Claude Haiku, Sonnet and Opus, and after each round Opus analysed the transcripts and gave the AI new guidance.';
+  if (mode.id === 'learn3') {
+    return {
+      setup: `Three rounds. ${base}`,
+      impact: 'modelImpact: {headline, body ≤ 60 words}: how the three models compared across the rounds — was the most capable model actually the hardest to catch, or did the learning matter more? Read honestly from the numbers.',
+      story: 'story: 3–5 beats ({heading, body}, body ≤ 45 words) telling how the AI learned this class: what it got wrong first, what it picked up from the students, how the students adapted.',
+    };
+  }
+  const last = activity.plan.find((p) => p.final) || activity.plan[3];
+  const off = FAMILY_ORDER.filter((f) => !last.models.includes(f));
+  const change = off.length
+    ? `In round 4, unknown to the students, ${modelList(off)} ${off.length === 1 ? 'was' : 'were'} switched off as a chat partner (${modelList(last.models)} only), keeping everything learned.`
+    : 'Round 4 kept all three models and everything learned.';
+  return {
+    setup: `Four rounds. ${base} ${change}`,
+    impact: off.length
+      ? `modelImpact: {headline, body ≤ 60 words}: what switching off ${modelList(off)} in round 4 did, read honestly from the numbers. If the difference is small or the sample is tiny, say so.`
+      : 'modelImpact: {headline, body ≤ 60 words}: how the three models compared, and whether round 4 held on to what was learned. Read honestly from the numbers.',
+    story: 'story: 3–5 beats ({heading, body}, body ≤ 45 words) telling how the AI learned this class: what it got wrong first, what it picked up from the students, how the students adapted.',
+  };
+}
+
 /**
- * The narrative for the end-of-activity overview: how the AI learned across
- * the four rounds, and what switching Opus off in round 4 did. Numbers come
- * from the app; Opus supplies the reading of them.
+ * The narrative for the end-of-activity overview. Numbers come from the app;
+ * Opus supplies the reading of them. What it is asked to explain depends on
+ * the mode: the learning, the model switch, or the model mix.
  */
 export async function buildOverview({ activity, series }) {
+  const { setup, impact, story } = describeActivity(activity);
+  const learning = modeInfo(activity.mode).learning;
+  const count = activity.rounds.length;
   const fallback = {
     title: `${activity.name}: Human or Not?`,
-    subtitle: `${activity.className} · four rounds`,
-    roundNotes: activity.rounds.map((r) => r.analysis?.headline || `Round ${r.number}`),
+    subtitle: `${activity.className} · ${count} round${count === 1 ? '' : 's'}`,
+    roundNotes: activity.rounds.map((r) => r.analysis?.headline || `Round ${r.number}: ${modelList(r.models)}`),
     story: [],
-    opusImpact: { headline: 'Round 4 ran without Opus.', body: 'Compare round 4 with round 3 on the chart.' },
+    opusImpact: { headline: 'How the models compared', body: 'Compare the rounds and the models on the charts.' },
     keyFindings: [], quotes: [], discussionQuestions: [
       'What made you decide your partner was an AI?',
-      'Did the AI get harder to catch as the rounds went on? Why might that be?',
-      'What does it mean that an AI can learn to sound like this class in under an hour?',
+      learning ? 'Did the AI get harder to catch as the rounds went on? Why might that be?' : 'Did you get better at spotting the AI as the rounds went on? What changed?',
+      'What does it mean that an AI can sound like a member of this class?',
     ],
     closing: 'Thanks for playing.',
   };
@@ -284,16 +327,15 @@ export async function buildOverview({ activity, series }) {
     guidance: r.analysis?.guidance,
   }));
 
+  const perRound = count > 6 ? 1 : count > 4 ? 2 : 3;
   const excerpts = activity.rounds.flatMap((r) => r.conversations
     .filter((c) => c.type === 'ai' && c.messages.length >= 2)
-    .slice(0, 3)
+    .slice(0, perRound)
     .map((c) => `Round ${r.number}, ${c.modelLabel}: ${c.messages.slice(0, 6).map((m) => `${m.from === 'ai' ? 'AI' : 'Student'}: ${m.text}`).join(' | ')}`));
 
   const prompt = [
     `"Human or Not?" has just finished with the class "${activity.className}" (activity "${activity.name}").`,
-    'Four rounds: in rounds 1–3 the AI partners were a mix of Claude Haiku, Sonnet and Opus, and after',
-    'each round Opus analysed the transcripts and gave the AI new guidance. In round 4, unknown to the',
-    'students, Opus was switched off as a chat partner (Haiku and Sonnet only).',
+    setup,
     '',
     `Series (AI fooled rate = % of students paired with an AI who believed it was human):\n${JSON.stringify(series)}`,
     '',
@@ -303,17 +345,16 @@ export async function buildOverview({ activity, series }) {
     '',
     'Write the content for an animated presentation shown to the class at the end. Return JSON:',
     '- title, subtitle: for the opening slide. Specific to this class, not generic.',
-    '- roundNotes: exactly 4 one-line notes, one per round, describing what changed.',
-    '- story: 3–5 beats ({heading, body}, body ≤ 45 words) telling how the AI learned this class:',
-    '  what it got wrong first, what it picked up from the students, how the students adapted.',
-    '- opusImpact: {headline, body ≤ 60 words}: what switching off Opus in round 4 did, read',
-    '  honestly from the numbers. If the difference is small or the sample is tiny, say so.',
+    `- roundNotes: exactly ${count} one-line note${count === 1 ? '' : 's'}, one per round, describing what changed.`,
+    `- ${story}`,
+    `- ${impact.replace(/^modelImpact/, 'opusImpact')}`,
     '- keyFindings: 3–5 findings, each one sentence, grounded in the data.',
     '- quotes: 2–4 short, revealing lines from the transcripts ({text ≤ 20 words, context}).',
     '  No real names. Prefer lines that show the AI being caught or passing.',
     '- discussionQuestions: 3–4 questions for the class debrief about AI, learning and trust.',
     '- closing: one sentence to end on.',
     'Be accurate: never claim a trend the numbers do not show. Small classes mean small samples.',
+    learning ? '' : 'Do not say the AI learned or adapted between rounds: in this mode it did not.',
   ].join('\n');
 
   const { data, usage } = await askJson({
@@ -328,7 +369,7 @@ export async function buildOverview({ activity, series }) {
   return {
     title: String(data.title || fallback.title),
     subtitle: String(data.subtitle || fallback.subtitle),
-    roundNotes: pick(data.roundNotes, fallback.roundNotes).map(String).slice(0, 4),
+    roundNotes: pick(data.roundNotes, fallback.roundNotes).map(String).slice(0, count),
     story: pick(data.story, []).slice(0, 5),
     opusImpact: data.opusImpact?.headline ? data.opusImpact : fallback.opusImpact,
     keyFindings: pick(data.keyFindings, []).map(String).slice(0, 5),

@@ -30,6 +30,7 @@ function check(collection, id) {
 
 /** JSON files: DATA_DIR/<collection>/<id>.json, written atomically. */
 export function fileStore(dir = process.env.DATA_DIR || path.join(here, '..', 'data')) {
+  let writes = 0;
   const fileFor = (collection, id) => path.join(dir, collection, `${id}.json`);
   return {
     kind: 'files',
@@ -45,7 +46,8 @@ export function fileStore(dir = process.env.DATA_DIR || path.join(here, '..', 'd
       check(collection, id);
       const file = fileFor(collection, id);
       await fs.mkdir(path.dirname(file), { recursive: true });
-      const temp = `${file}.${process.pid}.tmp`;
+      // A unique temp name: two saves of the same record can overlap.
+      const temp = `${file}.${process.pid}.${++writes}.tmp`;
       await fs.writeFile(temp, JSON.stringify(value));
       await fs.rename(temp, file);
     },

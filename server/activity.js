@@ -5,35 +5,31 @@ import { activePersonas, personaSet } from './personas.js';
 import { opener } from './text.js';
 import { analyseRound, buildOverview } from './analysis.js';
 import { overviewData } from './report.js';
+import { ensurePlan, extendPlan, modeInfo, setRoundModels, MAX_ROUNDS } from './modes.js';
 
 /**
- * One activity, live: four fixed rounds with one class.
+ * One activity, live, with one class. The rounds come from the activity's
+ * plan (see modes.js):
  *
- *   Round 1  every model (Haiku, Sonnet, Opus), working from the class brief
- *   Round 2  every model, plus what Opus learned from round 1
- *   Round 3  every model, plus what Opus learned from rounds 1–2
- *   Round 4  Opus switched off — students are not told — plus everything learned
+ *   learn3  three rounds, every model, Opus teaching the AI after each round
+ *   learn4  the same, then a fourth round with the models the educator chose
+ *           (by default Opus switched off; students are not told)
+ *   open    blocks of rounds with no learning; the educator picks the models
+ *           for each round and keeps adding blocks as long as they like
  *
- * After each round's results Opus reads the transcripts and writes guidance
- * for the next round; after round 4 it writes the overview. Everything is
- * written to the store as it happens, so a finished activity can be downloaded
- * later and a crash mid-activity loses at most the round in progress.
+ * In the learning modes, after each round's results Opus reads the transcripts
+ * and writes guidance for the next round. At the end it writes the overview.
+ * Everything is written to the store as it happens, so a finished activity
+ * can be downloaded later and a crash mid-activity loses at most the round in
+ * progress.
  */
-
-export const ROUND_COUNT = 4;
-export const ROUND_PLAN = [
-  { number: 1, models: ['haiku', 'sonnet', 'opus'], note: 'All models, from the class brief' },
-  { number: 2, models: ['haiku', 'sonnet', 'opus'], note: 'All models + what round 1 taught them' },
-  { number: 3, models: ['haiku', 'sonnet', 'opus'], note: 'All models + what rounds 1–2 taught them' },
-  { number: 4, models: ['haiku', 'sonnet'], note: 'Opus switched off (students are not told)' },
-];
 
 export const PHASES = {
   LOBBY: 'lobby',       // students joining, waiting for a round
   ACTIVE: 'active',     // chatting, clock running
   GUESS: 'guess',       // time up, students guessing
   RESULTS: 'results',   // round revealed; analysis running or done
-  OVERVIEW: 'overview', // all four rounds done; the animated overview is on screen
+  OVERVIEW: 'overview', // the planned rounds are done; the animated overview is on screen
   FINISHED: 'finished',
 };
 
@@ -61,7 +57,8 @@ export class LiveActivity extends EventEmitter {
    */
   constructor({ record, cls, context, store }) {
     super();
-    this.record = record;
+    this.record = ensurePlan(record);
+    this.mode = modeInfo(this.record.mode);
     this.cls = cls;
     this.context = context;
     this.store = store;
@@ -79,6 +76,9 @@ export class LiveActivity extends EventEmitter {
 
   get round() { return this.record.rounds[this.record.rounds.length - 1] || null; }
   get roundNumber() { return this.record.rounds.length; }
+  get plan() { return this.record.plan; }
+  get learning() { return this.mode.learning; }
+  get planDone() { return this.roundNumber >= this.plan.length; }
 
   later(fn, ms) {
     const t = setTimeout(() => { this.timers.delete(t); fn(); }, ms);
@@ -126,17 +126,21 @@ export class LiveActivity extends EventEmitter {
     if (![PHASES.LOBBY, PHASES.RESULTS].includes(this.phase)) {
       return { ok: false, error: 'A round is already under way.' };
     }
-    if (this.roundNumber >= ROUND_COUNT) return { ok: false, error: 'All four rounds are done.' };
+    if (this.planDone) {
+      return { ok: false, error: this.mode.id === 'open' ? 'Add more rounds to keep going.' : 'All the rounds are done.' };
+    }
     if (this.phase === PHASES.RESULTS && this.analysing) {
       return { ok: false, error: 'Opus is still analysing the last round. It will be ready in a moment.' };
     }
     const present = [...this.students.values()].filter((s) => s.connected);
     if (present.length === 0) return { ok: false, error: 'No students are logged in yet.' };
 
-    const plan = ROUND_PLAN[this.roundNumber];
+    const plan = this.plan[this.roundNumber];
     // The most recent guidance that exists: a failed analysis must not wipe
-    // what earlier rounds learned.
-    const guidance = [...this.record.rounds].reverse().find((r) => r.analysis?.guidance?.length)?.analysis.guidance || [];
+    // what earlier rounds learned. Open play does not learn between rounds.
+    const guidance = this.learning
+      ? [...this.record.rounds].reverse().find((r) => r.analysis?.guidance?.length)?.analysis.guidance || []
+      : [];
     const setId = this.record.personaSet;
     const sharedPrompt = buildSharedPrompt({ personaSetId: setId, context: this.context, guidance });
     const personas = shuffle(activePersonas(setId, this.record.personas));
@@ -151,8 +155,9 @@ export class LiveActivity extends EventEmitter {
 
     const round = {
       number: plan.number,
-      models: plan.models,
+      models: [...plan.models],
       note: plan.note,
+      secret: Boolean(plan.secret),
       startedAt: Date.now(),
       endedAt: null,
       durationSec: this.record.durationSec,
@@ -161,7 +166,7 @@ export class LiveActivity extends EventEmitter {
       guesses: {},
       stats: null,
       analysis: null,
-      analysisStatus: 'pending',
+      analysisStatus: this.learning ? 'pending' : 'off',
     };
     this.record.rounds.push(round);
     this.convs.clear();
@@ -403,13 +408,33 @@ export class LiveActivity extends EventEmitter {
     this.round.stats = this.computeStats(this.round);
     this.save();
     this.emit('phase');
-    this.runAnalysis();
+    if (this.learning) this.runAnalysis();
+    return { ok: true };
+  }
+
+  /** Change the models of the next round (open play, or the switch round). */
+  setModels(families) {
+    if (![PHASES.LOBBY, PHASES.RESULTS].includes(this.phase)) return { ok: false, error: 'Wait until the round is over.' };
+    if (this.planDone) return { ok: false, error: 'There is no next round yet.' };
+    const error = setRoundModels(this.record, this.roundNumber + 1, families);
+    if (error) return { ok: false, error };
+    this.save();
+    return { ok: true };
+  }
+
+  /** Open play: add another block of rounds. */
+  moreRounds() {
+    if (this.mode.id !== 'open') return { ok: false, error: 'Only open play can add rounds.' };
+    if (this.phase !== PHASES.RESULTS || !this.planDone) return { ok: false, error: 'Finish the rounds you have first.' };
+    if (this.plan.length >= MAX_ROUNDS) return { ok: false, error: `${MAX_ROUNDS} rounds is the most one activity can hold.` };
+    extendPlan(this.plan, this.record.blockSize);
+    this.save();
     return { ok: true };
   }
 
   async runAnalysis() {
     const round = this.round;
-    if (!round || this.analysing) return;
+    if (!round || this.analysing || !this.learning) return;
     this.analysing = true;
     round.analysisStatus = 'running';
     this.emit('roster');
@@ -432,7 +457,7 @@ export class LiveActivity extends EventEmitter {
   }
 
   retryAnalysis() {
-    if (this.phase !== PHASES.RESULTS || this.analysing) return { ok: false, error: 'Nothing to retry.' };
+    if (this.phase !== PHASES.RESULTS || this.analysing || !this.learning) return { ok: false, error: 'Nothing to retry.' };
     this.runAnalysis();
     return { ok: true };
   }
@@ -468,10 +493,10 @@ export class LiveActivity extends EventEmitter {
   }
 
   showOverview() {
-    if (this.phase !== PHASES.RESULTS || this.roundNumber < ROUND_COUNT) {
-      return { ok: false, error: 'The overview comes after round 4.' };
+    if (this.phase !== PHASES.RESULTS || !this.planDone) {
+      return { ok: false, error: `The overview comes after round ${this.plan.length}.` };
     }
-    if (this.analysing) return { ok: false, error: 'Opus is still analysing round 4.' };
+    if (this.analysing) return { ok: false, error: 'Opus is still analysing the last round.' };
     this.phase = PHASES.OVERVIEW;
     this.emit('phase');
     if (!this.record.overview) this.runOverview();
@@ -508,7 +533,7 @@ export class LiveActivity extends EventEmitter {
   async finish() {
     this.clearTimers();
     this.phase = PHASES.FINISHED;
-    this.record.status = this.roundNumber >= ROUND_COUNT ? 'finished' : 'ended early';
+    this.record.status = this.planDone && this.roundNumber > 0 ? 'finished' : 'ended early';
     this.record.finishedAt = Date.now();
     await this.save();
     this.emit('phase');
@@ -541,8 +566,11 @@ export class LiveActivity extends EventEmitter {
       personaSet: personaSet(this.record.personaSet).label,
       phase: this.phase,
       roundNumber: this.roundNumber,
-      roundCount: ROUND_COUNT,
-      plan: ROUND_PLAN,
+      roundCount: this.plan.length,
+      plan: this.plan,
+      mode: { id: this.mode.id, label: this.mode.label, learning: this.learning },
+      blockSize: this.record.blockSize || null,
+      maxRounds: MAX_ROUNDS,
       endsAt: this.endsAt,
       durationSec: this.record.durationSec,
       classSize: this.cls.students.length,
@@ -551,6 +579,7 @@ export class LiveActivity extends EventEmitter {
         number: round.number,
         models: round.models,
         note: round.note,
+        secret: Boolean(round.secret),
         stats: round.stats,
         analysis: round.analysis,
         analysisStatus: round.analysisStatus,
@@ -578,6 +607,8 @@ export class LiveActivity extends EventEmitter {
       label: s?.label,
       activityName: this.record.name,
       roundNumber: this.roundNumber,
+      roundCount: this.plan.length,
+      lastRound: this.planDone && this.mode.id !== 'open',
       endsAt: this.endsAt,
       inRound: Boolean(conv) && this.phase !== PHASES.LOBBY,
       guessed: Boolean(round?.guesses?.[n]),

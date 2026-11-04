@@ -175,6 +175,73 @@ const restored = await api('/restore', { method: 'POST', body: backup });
 check('a backup restores', restored.data.ok && restored.data.counts.activities === 1);
 check('a non-backup is refused', (await api('/restore', { method: 'POST', body: { hello: 1 } })).status === 400);
 
+console.log('\n--- 9. the other modes ---');
+check('the three modes are offered', meta.modes.map((m) => m.id).join(',') === 'learn3,learn4,open');
+const cmd = async (ev, p = {}) => { const r = await emit(teacher, ev, p); await sleep(200); return r; };
+const opusCalls = async () => (await getCalls()).filter((c) => c.system.includes('analyse transcripts')).length;
+const rejoin = async () => {
+  for (const k of kids) await emit(k.sock, 'student:join', { code: full.students[k.n - 1].code });
+  await sleep(200);
+};
+const quickRound = async (label, expect) => {
+  const started = await cmd('live:startRound', {});
+  check(`${label} starts`, started.ok, started.error || '');
+  await sleep(200);
+  const used = [...new Set(view.students.filter((s) => s.partner === 'ai').map((s) => s.model.split(' ')[1].toLowerCase()))].sort();
+  check(`${label} uses ${expect.join(', ')}`, used.join() === [...expect].sort().join() || (used.length && used.every((m) => expect.includes(m))), used.join(','));
+  check(`${label} reveals`, (await cmd('live:results', {})).ok && view.phase === 'results');
+};
+
+// Three rounds, learning
+await api('/activities', { method: 'POST', body: { classId: cls.id, name: 'Learn three', durationSec: 60, aiRatio: 0.6, mode: 'learn3' } });
+await rejoin();
+check('learn3: three rounds planned, all models', view.roundCount === 3 && view.plan.every((p) => p.models.length === 3));
+check('learn3: the models are fixed', !(await cmd('live:setModels', { models: ['haiku'] })).ok);
+for (let r = 1; r <= 3; r++) {
+  await quickRound(`learn3 round ${r}`, ['haiku', 'sonnet', 'opus']);
+  check(`learn3 round ${r}: Opus analyses it`, await until(() => view.round?.analysisStatus === 'done'));
+}
+check('learn3: no fourth round', !(await cmd('live:startRound', {})).ok);
+check('learn3: no more rounds can be added', !(await cmd('live:moreRounds', {})).ok);
+check('learn3: the overview opens after round 3', (await cmd('live:overview', {})).ok);
+check('learn3: the overview carries three rounds', await until(() => view.overviewData?.rounds.length === 3 && view.overviewData.mode.id === 'learn3'));
+await cmd('live:finish', {});
+check('learn3: listed as finished', (await api('/activities')).data[0].status === 'finished');
+
+// Four rounds, learning, then a switch the educator chose
+const l4 = (await api('/activities', { method: 'POST', body: { classId: cls.id, name: 'Learn four', durationSec: 60, mode: 'learn4', finalModels: ['opus'] } })).data;
+await rejoin();
+check('learn4: round 4 uses the chosen models', view.plan[3].models.join() === 'opus' && view.plan[3].secret);
+check('learn4: rounds 1–3 cannot be changed', !(await cmd('live:setModels', { models: ['haiku'] })).ok);
+await cmd('live:finish', {});
+await api(`/activities/${l4.id}`, { method: 'DELETE' });
+
+// Open play
+await resetCalls();
+await api('/activities', { method: 'POST', body: { classId: cls.id, name: 'Open play', durationSec: 60, aiRatio: 0.6, mode: 'open', blockSize: 2, models: ['sonnet'] } });
+await rejoin();
+check('open: two rounds planned with the starting models', view.roundCount === 2 && view.plan.every((p) => p.models.join() === 'sonnet'));
+check('open: round 1 models can be changed in the lobby', (await cmd('live:setModels', { models: ['haiku'] })).ok && view.plan[0].models.join() === 'haiku');
+check('open: at least one model is required', !(await cmd('live:setModels', { models: [] })).ok);
+await quickRound('open round 1', ['haiku']);
+check('open: no analysis between rounds', view.round.analysisStatus === 'off' && (await opusCalls()) === 0);
+check('open: round 2 models can be changed after results', (await cmd('live:setModels', { models: ['sonnet', 'opus'] })).ok);
+await quickRound('open round 2', ['sonnet', 'opus']);
+check('open: the block ends', !(await cmd('live:startRound', {})).ok);
+check('open: keep going adds another block', (await cmd('live:moreRounds', {})).ok && view.roundCount === 4);
+check('open: the new block carries the last models on', view.plan[2].models.join() === 'sonnet,opus');
+await quickRound('open round 3', ['sonnet', 'opus']);
+check('open: the overview waits for the block to finish', !(await cmd('live:overview', {})).ok);
+await quickRound('open round 4', ['sonnet', 'opus']);
+check('open: still no analysis', (await opusCalls()) === 0);
+check('open: the overview opens', (await cmd('live:overview', {})).ok);
+check('open: the overview carries four rounds and no learning', await until(() => view.overviewData?.rounds.length === 4 && view.overviewData.mode.learning === false));
+const overviewPrompt = (await getCalls()).find((c) => c.system.includes('honest, engaging summaries'));
+check('open: Opus is told the AI did not learn', Boolean(overviewPrompt?.messages?.[0]?.content?.includes('did NOT learn')));
+await cmd('live:finish', {});
+const openRow = (await api('/activities')).data[0];
+check('open: listed with its mode and rounds', openRow.mode === 'Open play' && openRow.rounds === 4 && openRow.planned === 4 && openRow.hasOverview);
+
 teacher.close();
 for (const k of kids) k.sock.close();
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);

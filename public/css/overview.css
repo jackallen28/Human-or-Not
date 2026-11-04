@@ -28,7 +28,7 @@ body.ov-standalone { margin: 0; background: #14110d; }
 .ov-d2 { --d: 500ms; } .ov-d3 { --d: 1000ms; } .ov-d4 { --d: 1600ms; }
 @keyframes ov-rise { to { opacity: 1; transform: none; } }
 
-.ov-plan { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.ov-plan { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: 14px; }
 .ov-plan-card, .ov-step, .ov-beat { background: var(--ov-panel); border: 1px solid var(--ov-line); border-radius: 14px; padding: 18px; }
 .ov-plan-card p, .ov-beat p { font-size: .98rem; margin: 10px 0 0; }
 .ov-plan-n { font-weight: 750; color: var(--ov-accent); }
@@ -50,7 +50,7 @@ body.ov-standalone { margin: 0; background: #14110d; }
 .ov-slide .ov-bar-off .ov-bar-val { opacity: .5; animation: none; color: var(--ov-muted); }
 .ov-notes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 24px; margin-top: 44px; color: var(--ov-muted); }
 .ov-notes b { color: var(--ov-accent); margin-right: 8px; }
-.ov-groups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.ov-groups { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: 18px; }
 .ov-group-label { text-align: center; margin-top: 32px; font-weight: 650; }
 
 .ov-timeline, .ov-beats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createZip } from './zip.js';
+import { ensurePlan, modeInfo, modelList } from './modes.js';
 
 /**
  * Everything the educator downloads at the end: one ZIP with the raw data,
@@ -96,6 +97,7 @@ export function analysisMarkdown(round) {
     `AI passed as human: ${pct(s.aiFooledRate)} (${s.aiFooled ?? 0} of ${s.aiAnswered ?? 0}). Overall accuracy: ${pct(s.accuracy)}.`,
     '',
   ];
+  if (!a && round.analysisStatus === 'off') return [...lines, '_Open play: no analysis between rounds._', ''].join('\n');
   if (!a) return [...lines, `_Analysis ${round.analysisStatus || 'not run'}${round.analysisError ? `: ${round.analysisError}` : ''}._`, ''].join('\n');
   const list = (title, items, fmt = (x) => x) => (items?.length ? [`## ${title}`, '', ...items.map((x) => `- ${fmt(x)}`), ''] : []);
   return [
@@ -124,6 +126,7 @@ function statsTable(record) {
 }
 
 export function reportHtml(record, cls, context) {
+  ensurePlan(record);
   const o = record.overview;
   const label = labeller(cls);
   const cost = record.rounds.reduce((sum, r) => sum + Object.values(r.stats?.byModel || {}).reduce((n, m) => n + (m.costUsd || 0), 0), 0);
@@ -140,7 +143,7 @@ export function reportHtml(record, cls, context) {
         ${a.aiTells?.length ? `<h3>What gave the AI away</h3><ul>${a.aiTells.map((x) => `<li>${esc(x.tell)} <em>“${esc(x.evidence)}”</em></li>`).join('')}</ul>` : ''}
         ${a.studentStrategies?.length ? `<h3>How students tried to catch it</h3><ul>${a.studentStrategies.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
         ${a.guidance?.length ? `<h3>What the AI was told for the next round</h3><ol>${a.guidance.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}`
-        : `<p><em>Analysis ${esc(r.analysisStatus || 'not run')}.</em></p>`}
+        : r.analysisStatus === 'off' ? '' : `<p><em>Analysis ${esc(r.analysisStatus || 'not run')}.</em></p>`}
       <h3>Transcripts</h3>${convs}</section>`;
   }).join('');
 
@@ -158,15 +161,15 @@ footer{margin-top:50px;color:#9a8e80;font-size:.8em}
 </style></head><body>
 <h1>${esc(record.name)}</h1>
 <p class="meta">${esc(record.className)} · ${esc(record.contextName || 'no class context')} · ${esc(record.personaSetLabel || '')}<br>
-Started ${esc(when(record.createdAt))} · ${record.rounds.length} of 4 rounds · ${Math.round(record.durationSec / 60)}-minute rounds · ${Math.round(record.aiRatio * 100)}% of students paired with the AI each round<br>
+${esc(modeInfo(record.mode).label)} · started ${esc(when(record.createdAt))} · ${record.rounds.length} of ${record.plan.length} rounds · ${Math.round(record.durationSec / 60)}-minute rounds · ${Math.round(record.aiRatio * 100)}% of students paired with the AI each round<br>
 Estimated API cost of the chats: US$${cost.toFixed(2)} (analysis calls not included)</p>
 ${o ? `<div class="box"><h3 style="margin-top:0">${esc(o.title)}</h3><p>${esc(o.subtitle)}</p>
   ${o.keyFindings?.length ? `<ul>${o.keyFindings.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
   <p><strong>${esc(o.opusImpact?.headline || '')}</strong> ${esc(o.opusImpact?.body || '')}</p></div>` : ''}
-<h2>The four rounds at a glance</h2>
+<h2>The rounds at a glance</h2>
 ${statsTable(record)}
 <p class="meta">"AI passed as human" is the share of students paired with an AI who guessed they had been talking to a classmate. Small classes mean small samples: one student is several percentage points.</p>
-${o?.story?.length ? `<h2>How the AI learned this class</h2>${o.story.map((b) => `<h3>${esc(b.heading)}</h3><p>${esc(b.body)}</p>`).join('')}` : ''}
+${o?.story?.length ? `<h2>${modeInfo(record.mode).learning ? 'How the AI learned this class' : 'What happened'}</h2>${o.story.map((b) => `<h3>${esc(b.heading)}</h3><p>${esc(b.body)}</p>`).join('')}` : ''}
 ${o?.discussionQuestions?.length ? `<h2>Questions for discussion</h2><ol>${o.discussionQuestions.map((q) => `<li>${esc(q)}</li>`).join('')}</ol>` : ''}
 ${rounds}
 ${context?.brief ? `<h2>The class brief the AI worked from</h2><pre style="white-space:pre-wrap;font:inherit;background:#fff;border:1px solid #eadfd2;border-radius:8px;padding:14px">${esc(context.brief)}</pre>` : ''}
@@ -193,9 +196,13 @@ export function overviewHtml(record) {
 
 /** What the presentation needs: the numbers from the app, the words from Opus. */
 export function overviewData(record) {
+  ensurePlan(record);
+  const mode = modeInfo(record.mode);
   return {
     activity: record.name,
     className: record.className,
+    mode: { id: mode.id, label: mode.label, learning: mode.learning },
+    plan: record.plan.map((p) => ({ number: p.number, models: p.models, secret: Boolean(p.secret), final: Boolean(p.final) })),
     rounds: record.rounds.map((r) => ({
       number: r.number,
       models: r.models,
@@ -205,6 +212,7 @@ export function overviewData(record) {
       byModel: Object.fromEntries(Object.values(r.stats?.byModel || {}).map((m) => [m.family, { label: m.label, rate: m.fooledRate, n: m.answered }])),
       guidance: r.analysis?.guidance || [],
       headline: r.analysis?.headline || '',
+      secret: Boolean(r.secret),
     })),
     story: record.overview || null,
   };
@@ -241,10 +249,11 @@ export function activityZip({ record, cls, context }) {
 }
 
 function readme(record) {
+  ensurePlan(record);
   return [
     `Human or Not? — ${record.name} (${record.className})`,
     '',
-    'report.html ................ start here: the four rounds, findings, and every transcript',
+    'report.html ................ start here: every round, findings, and every transcript',
     'overview/overview.html ..... the animated end-of-activity overview; opens offline in any browser',
     'overview/overview.json ..... the overview content Claude Opus wrote',
     'analysis/round-N.md ........ what Opus found after each round, and the guidance it gave the AI',
@@ -256,7 +265,8 @@ function readme(record) {
     'data/activity.json ......... everything above in one file (codes removed)',
     'context/ ................... the class context the AI was given',
     '',
-    'Rounds 1-3 used Claude Haiku, Sonnet and Opus. Round 4 used Haiku and Sonnet only.',
+    `Mode: ${modeInfo(record.mode).label}.`,
+    ...record.rounds.map((r) => `Round ${r.number}: ${modelList(r.models)}${r.analysisStatus === 'off' ? '' : ''}.`),
     'Students are labelled "Student N" from the class list; no codes are included.',
     '',
   ].join('\n');

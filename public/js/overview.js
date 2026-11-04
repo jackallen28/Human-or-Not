@@ -1,6 +1,6 @@
 /*
- * The end-of-activity overview: an animated, self-running presentation of the
- * four rounds. The same template for every activity; the numbers come from the
+ * The end-of-activity overview: an animated, self-running presentation of
+ * every round. The same template for every activity; the numbers come from the
  * app and the words from Claude Opus, so what it says and what it emphasises
  * changes with each class.
  *
@@ -26,35 +26,46 @@
       <div class="ov-bar-label">${esc(label)}</div></div>`;
   }
 
+  const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+  const say = (n) => WORDS[n] || String(n);
+  const listNames = (fams) => fams.map((f) => MODEL_NAMES[f]).join(', ').replace(/, ([^,]*)$/, ' and $1');
+
   function slides(data) {
     const s = data.story || {};
     const rounds = data.rounds || [];
-    const r3 = rounds.find((r) => r.number === 3);
-    const r4 = rounds.find((r) => r.number === 4);
-    const opusRates = rounds.map((r) => r.byModel?.opus?.rate);
+    const mode = data.mode || { id: 'learn4', learning: true };
+    const plan = data.plan || rounds.map((r) => ({ number: r.number, models: r.models, secret: r.number === 4, final: r.number === 4 }));
+    const shown = plan.filter((p) => rounds.some((r) => r.number === p.number));
+    const count = rounds.length;
+    const cols = Math.min(Math.max(count, 1), 6);
+    const finalPlan = shown.find((p) => p.final && p.secret);
+    const switched = mode.id === 'learn4' && finalPlan;
+    const offIn = (p) => Object.keys(MODEL_NAMES).filter((m) => !p.models.includes(m));
     const logo = window.OVERVIEW_LOGO || '/img/allentronics-logo.png';
     const out = [];
 
     out.push(`<section class="ov-slide ov-title">
       <div class="ov-kicker">Human or Not? · ${esc(data.className)}</div>
       <h1 class="ov-rise">${esc(s.title || data.activity)}</h1>
-      <p class="ov-rise ov-d2">${esc(s.subtitle || 'Four rounds. One AI, learning your class.')}</p>
+      <p class="ov-rise ov-d2">${esc(s.subtitle || (mode.learning ? 'One AI, learning your class.' : 'Classmate or AI?'))}</p>
     </section>`);
 
     out.push(`<section class="ov-slide">
       <div class="ov-kicker">The experiment</div>
-      <h2>Four rounds, one AI learning as it went</h2>
-      <div class="ov-plan">${[1, 2, 3, 4].map((n, i) => {
-        const r = rounds.find((x) => x.number === n);
-        const opusOff = n === 4;
-        const text = n === 1 ? 'Started from the class brief alone.'
-          : opusOff ? '<strong>Opus switched off.</strong> Nobody was told.'
-            : `Plus everything Opus learned from ${n > 2 ? `rounds 1–${n - 1}` : 'round 1'}.`;
-        return `<div class="ov-plan-card ov-rise" style="--d:${i * 350}ms">
-          <div class="ov-plan-n">Round ${n}</div>
-          <div class="ov-models">${['haiku', 'sonnet', 'opus'].map((m) => `<span class="ov-model ${opusOff && m === 'opus' ? 'off' : ''}" style="--c:${MODEL_COLOURS[m]}">${MODEL_NAMES[m]}</span>`).join('')}</div>
+      <h2>${mode.learning ? `${say(count)} rounds, one AI learning as it went` : `${say(count)} round${count === 1 ? '' : 's'}, your choice of models`}</h2>
+      <div class="ov-plan" style="--cols:${cols}">${shown.map((p, i) => {
+        const r = rounds.find((x) => x.number === p.number);
+        const off = offIn(p);
+        let text;
+        if (!mode.learning) text = 'Same class brief. No learning between rounds.';
+        else if (p.number === 1) text = 'Started from the class brief alone.';
+        else if (p.final && p.secret) text = `<strong>${esc(listNames(off))} switched off.</strong> Nobody was told.`;
+        else text = `Plus everything Opus learned from ${p.number > 2 ? `rounds 1–${p.number - 1}` : 'round 1'}.`;
+        return `<div class="ov-plan-card ov-rise" style="--d:${Math.min(i * 350, 2100)}ms">
+          <div class="ov-plan-n">Round ${p.number}</div>
+          <div class="ov-models">${Object.keys(MODEL_NAMES).map((m) => `<span class="ov-model ${p.models.includes(m) ? '' : 'off'}" style="--c:${MODEL_COLOURS[m]}">${MODEL_NAMES[m]}</span>`).join('')}</div>
           <p>${text}</p>
-          ${r && n < 4 ? `<div class="ov-small">${r.guidance.length} lessons learned after this round</div>` : ''}
+          ${mode.learning && r?.guidance?.length && p.number < count ? `<div class="ov-small">${r.guidance.length} lessons learned after this round</div>` : ''}
         </div>`;
       }).join('')}</div>
     </section>`);
@@ -62,22 +73,22 @@
     out.push(`<section class="ov-slide">
       <div class="ov-kicker">How often the AI passed as human</div>
       <h2>Students who believed the AI was a classmate</h2>
-      <div class="ov-chart">${rounds.map((r, i) => bar(r.aiFooledRate, i === 3 ? '#8fd0ff' : '#ee8a2a', `Round ${r.number}`, i * 450)).join('')}</div>
-      <div class="ov-notes">${(s.roundNotes || []).map((note, i) => `<div class="ov-rise" style="--d:${1800 + i * 300}ms"><b>R${i + 1}</b>${esc(note)}</div>`).join('')}</div>
+      <div class="ov-chart">${rounds.map((r, i) => bar(r.aiFooledRate, r.secret ? '#8fd0ff' : '#ee8a2a', `Round ${r.number}`, Math.min(i * 450, 2700))).join('')}</div>
+      <div class="ov-notes">${(s.roundNotes || []).slice(0, count).map((note, i) => `<div class="ov-rise" style="--d:${1800 + i * 300}ms"><b>R${rounds[i]?.number ?? i + 1}</b>${esc(note)}</div>`).join('')}</div>
     </section>`);
 
     out.push(`<section class="ov-slide">
       <div class="ov-kicker">By model</div>
       <h2>Haiku, Sonnet and Opus, round by round</h2>
-      <div class="ov-groups">${rounds.map((r, i) => `<div class="ov-group">
-        <div class="ov-chart ov-chart-sm">${['haiku', 'sonnet', 'opus'].map((m, j) => (r.byModel?.[m]
-          ? bar(r.byModel[m].rate, MODEL_COLOURS[m], MODEL_NAMES[m], i * 500 + j * 150)
-          : `<div class="ov-bar ov-bar-off"><div class="ov-bar-val">${m === 'opus' && r.number === 4 ? 'off' : '—'}</div><div class="ov-bar-label">${MODEL_NAMES[m]}</div></div>`)).join('')}</div>
+      <div class="ov-groups" style="--cols:${cols}">${rounds.map((r, i) => `<div class="ov-group">
+        <div class="ov-chart ov-chart-sm">${Object.keys(MODEL_NAMES).map((m, j) => (r.byModel?.[m]
+          ? bar(r.byModel[m].rate, MODEL_COLOURS[m], MODEL_NAMES[m], Math.min(i * 500, 3000) + j * 150)
+          : `<div class="ov-bar ov-bar-off"><div class="ov-bar-val">${(r.models || []).includes(m) ? '—' : 'off'}</div><div class="ov-bar-label">${MODEL_NAMES[m]}</div></div>`)).join('')}</div>
         <div class="ov-group-label">Round ${r.number}</div></div>`).join('')}</div>
       <p class="ov-small">Small classes mean small samples — each bar may be only a few students.</p>
     </section>`);
 
-    const learned = rounds.filter((r) => r.guidance.length && r.number < 4);
+    const learned = mode.learning ? rounds.filter((r) => r.guidance.length && r.number < count) : [];
     if (learned.length) {
       out.push(`<section class="ov-slide">
         <div class="ov-kicker">What the AI was taught</div>
@@ -93,23 +104,40 @@
     if (s.story?.length) {
       out.push(`<section class="ov-slide">
         <div class="ov-kicker">The story</div>
-        <h2>How it learned your class</h2>
+        <h2>${mode.learning ? 'How it learned your class' : 'What happened'}</h2>
         <div class="ov-beats">${s.story.map((b, i) => `<div class="ov-beat ov-rise" style="--d:${i * 900}ms">
           <h3>${esc(b.heading)}</h3><p>${esc(b.body)}</p></div>`).join('')}</div>
       </section>`);
     }
 
-    out.push(`<section class="ov-slide">
-      <div class="ov-kicker">Round 4</div>
-      <h2>${esc(s.opusImpact?.headline || 'What happened when Opus was switched off')}</h2>
-      <div class="ov-versus">
-        <div class="ov-big ov-rise"><div class="ov-big-n" data-count="${r3?.aiFooledRate ?? ''}">${pct(r3?.aiFooledRate)}</div><div>Round 3 · with Opus</div></div>
-        <div class="ov-vs ov-rise ov-d2">→</div>
-        <div class="ov-big ov-rise ov-d3"><div class="ov-big-n" data-count="${r4?.aiFooledRate ?? ''}">${pct(r4?.aiFooledRate)}</div><div>Round 4 · without Opus</div></div>
-      </div>
-      <p class="ov-rise ov-d4">${esc(s.opusImpact?.body || '')}</p>
-      <p class="ov-small ov-rise ov-d4">Opus on its own, rounds 1–3: passed as human ${pct(avg(opusRates))} of the time.</p>
-    </section>`);
+    if (switched) {
+      const last = rounds.find((r) => r.number === finalPlan.number);
+      const before = rounds.find((r) => r.number === finalPlan.number - 1);
+      const off = offIn(finalPlan);
+      const offRates = rounds.filter((r) => r.number < finalPlan.number).map((r) => avg(off.map((m) => r.byModel?.[m]?.rate)));
+      out.push(`<section class="ov-slide">
+        <div class="ov-kicker">Round ${finalPlan.number}</div>
+        <h2>${esc(s.opusImpact?.headline || `What happened when ${listNames(off)} ${off.length === 1 ? 'was' : 'were'} switched off`)}</h2>
+        <div class="ov-versus">
+          <div class="ov-big ov-rise"><div class="ov-big-n" data-count="${before?.aiFooledRate ?? ''}">${pct(before?.aiFooledRate)}</div><div>Round ${before?.number ?? ''} · all models</div></div>
+          <div class="ov-vs ov-rise ov-d2">→</div>
+          <div class="ov-big ov-rise ov-d3"><div class="ov-big-n" data-count="${last?.aiFooledRate ?? ''}">${pct(last?.aiFooledRate)}</div><div>Round ${finalPlan.number} · without ${esc(listNames(off))}</div></div>
+        </div>
+        <p class="ov-rise ov-d4">${esc(s.opusImpact?.body || '')}</p>
+        <p class="ov-small ov-rise ov-d4">${esc(listNames(off))} on ${off.length === 1 ? 'its' : 'their'} own, rounds 1–${finalPlan.number - 1}: passed as human ${pct(avg(offRates))} of the time.</p>
+      </section>`);
+    } else {
+      const overall = Object.keys(MODEL_NAMES).map((m) => ({ m, rate: avg(rounds.map((r) => r.byModel?.[m]?.rate)) })).filter((x) => x.rate !== null);
+      if (overall.length) {
+        out.push(`<section class="ov-slide">
+          <div class="ov-kicker">The models</div>
+          <h2>${esc(s.opusImpact?.headline || 'Which model was hardest to catch?')}</h2>
+          <div class="ov-versus">${overall.map((x, i) => `<div class="ov-big ov-rise" style="--d:${i * 300}ms"><div class="ov-big-n" data-count="${x.rate}" style="color:${MODEL_COLOURS[x.m]}">${pct(x.rate)}</div><div>${MODEL_NAMES[x.m]} · passed as human</div></div>`).join('')}</div>
+          <p class="ov-rise ov-d4">${esc(s.opusImpact?.body || '')}</p>
+          <p class="ov-small ov-rise ov-d4">Averaged over every round each model played.</p>
+        </section>`);
+      }
+    }
 
     if (s.quotes?.length) {
       out.push(`<section class="ov-slide">

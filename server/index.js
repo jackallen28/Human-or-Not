@@ -10,7 +10,8 @@ import { hasApiKey, models, resolveModels } from './claude.js';
 import { contextWordCount, extractSamples, trainContext } from './analysis.js';
 import { PERSONA_SETS, personaCatalog, personaSet } from './personas.js';
 import { buildCardsPdf, generateCodes } from './pdf.js';
-import { LiveActivity, PHASES, ROUND_PLAN } from './activity.js';
+import { LiveActivity, PHASES } from './activity.js';
+import { MODES, MAX_ROUNDS, buildPlan, clampBlock, ensurePlan, modeInfo } from './modes.js';
 import { activityZip, overviewData } from './report.js';
 import { createZip } from './zip.js';
 
@@ -101,7 +102,8 @@ api.get('/meta', wrap(async (req, res) => {
     hasApiKey: hasApiKey(),
     models: models(),
     personaSets: personaCatalog(),
-    rounds: ROUND_PLAN,
+    modes: Object.values(MODES),
+    maxRounds: MAX_ROUNDS,
     storage: { kind: store.kind, description: store.describe(), persistent: !onFreeRenderDisk },
     joinUrl: joinUrl(req).replace(/^https?:\/\//, ''),
     live: live ? { id: live.record.id, name: live.record.name, phase: live.phase } : null,
@@ -276,7 +278,8 @@ api.get('/classes/:id/cards.pdf', wrap(async (req, res) => {
 
 const activitySummary = (a) => ({
   id: a.id, name: a.name, className: a.className, contextName: a.contextName, status: a.status,
-  rounds: a.rounds.length, createdAt: a.createdAt, finishedAt: a.finishedAt || null,
+  rounds: a.rounds.length, planned: ensurePlan(a).plan.length, mode: modeInfo(a.mode).short,
+  hasOverview: Boolean(a.overview), createdAt: a.createdAt, finishedAt: a.finishedAt || null,
   fooled: a.rounds.map((r) => r.stats?.aiFooledRate ?? null),
 });
 
@@ -294,6 +297,7 @@ api.post('/activities', wrap(async (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 80);
   if (!name) return res.status(400).json({ error: 'Name the activity, e.g. "Preservice teachers, week 6".' });
   const context = cls.contextId ? await store.get('contexts', cls.contextId) : null;
+  const mode = MODES[req.body?.mode] ? req.body.mode : 'learn4';
   const record = {
     id: newId('act'),
     name,
@@ -308,6 +312,9 @@ api.post('/activities', wrap(async (req, res) => {
     durationSec: Math.max(60, Math.min(600, Number(req.body?.durationSec) || 180)),
     aiRatio: Math.max(0.2, Math.min(0.8, Number(req.body?.aiRatio) || 0.5)),
     models: models(),
+    mode,
+    blockSize: mode === 'open' ? clampBlock(req.body?.blockSize) : null,
+    plan: buildPlan(mode, { finalModels: req.body?.finalModels, models: req.body?.models, blockSize: req.body?.blockSize }),
     status: 'live',
     createdAt: Date.now(),
     rounds: [],
@@ -447,10 +454,10 @@ io.on('connection', (socket) => {
     socket.emit('live', live ? live.teacherView() : null);
   });
 
-  const command = (event, run) => socket.on(event, async (_payload, ack) => {
+  const command = (event, run) => socket.on(event, async (payload, ack) => {
     if (role !== 'teacher') return ack?.({ ok: false, error: 'Not authorised.' });
     if (!live) return ack?.({ ok: false, error: 'No activity is running.' });
-    const result = (await run()) || { ok: true };
+    const result = (await run(payload || {})) || { ok: true };
     ack?.(result);
     queueTeachers();
   });
@@ -459,6 +466,12 @@ io.on('connection', (socket) => {
   command('live:results', () => live.showResults());
   command('live:retryAnalysis', () => live.retryAnalysis());
   command('live:overview', () => live.showOverview());
+  command('live:setModels', (p) => live.setModels(p.models));
+  command('live:moreRounds', () => {
+    const result = live.moreRounds();
+    for (const n of studentSockets.keys()) pushStudent(n);
+    return result;
+  });
   command('live:retryOverview', () => live.retryOverview());
   command('live:finish', async () => {
     const result = await live.finish();

@@ -75,7 +75,7 @@
           shownRound = s.roundNumber;
           renderTranscript(s.transcript || []);
         }
-        $('chat-round').textContent = `Round ${s.roundNumber} of 4`;
+        $('chat-round').textContent = `Round ${s.roundNumber} of ${s.roundCount}`;
         show('chat');
         startClock();
         $('msg').focus();
@@ -88,11 +88,11 @@
         break;
       case 'results':
         stopClock();
-        if (s.result) showResult(s.result, s.roundNumber);
+        if (s.result) showResult(s.result, s.lastRound);
         else wait(`Round ${s.roundNumber}`, 'Results are up', 'Look up at the screen.');
         break;
       case 'overview':
-        wait('All done', 'Eyes on the screen', 'Your teacher is showing how the AI learned over the four rounds.');
+        wait('All done', 'Eyes on the screen', 'Your teacher is showing what happened across the rounds.');
         break;
       case 'finished':
         stopClock();
@@ -105,7 +105,7 @@
     }
   });
 
-  function showResult(r, round) {
+  function showResult(r, lastRound) {
     const wasAi = r.partner === 'ai';
     if (!r.guess) {
       $('result-icon').textContent = wasAi ? '🤖' : '🧑';
@@ -120,7 +120,7 @@
       $('result-title').textContent = wasAi ? 'Fooled — it was an AI' : 'It was actually a classmate';
       $('result-body').textContent = wasAi ? 'You thought you were talking to a person.' : 'You thought they were an AI.';
     }
-    $('result-body').textContent += round < 4 ? '' : ' That was the last round.';
+    $('result-body').textContent += lastRound ? ' That was the last round.' : '';
     show('result');
   }
 

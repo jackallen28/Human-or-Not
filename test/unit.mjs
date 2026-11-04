@@ -9,6 +9,8 @@ import { fileStore, pgStore } from '../server/store.js';
 import { parseJsonLoose } from '../server/claude.js';
 import { cleanContextFile, contextWordCount, extractSamples } from '../server/analysis.js';
 import { buildSharedPrompt } from '../server/bot.js';
+import { buildPlan, extendPlan, setRoundModels, ensurePlan, MAX_ROUNDS } from '../server/modes.js';
+import { describeActivity } from '../server/analysis.js';
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -80,6 +82,28 @@ check('postgres store upserts', (await pg.get('activities', 'act_1'))?.rounds.le
 check('postgres store lists', (await pg.list('activities')).length === 1);
 await pg.remove('activities', 'act_1');
 check('postgres store removes', (await pg.get('activities', 'act_1')) === null);
+
+console.log('\n--- modes ---');
+const p3 = buildPlan('learn3');
+check('learn3: three rounds, every model, fixed', p3.length === 3 && p3.every((p) => p.models.length === 3 && !p.editable));
+const p4 = buildPlan('learn4', {});
+check('learn4: Opus off in round 4 by default, secret', p4.length === 4 && p4[3].models.join() === 'haiku,sonnet' && p4[3].secret && p4[3].editable);
+check('learn4: all models kept is not a secret', !buildPlan('learn4', { finalModels: ['opus', 'haiku', 'sonnet'] })[3].secret);
+check('learn4: unknown models fall back', buildPlan('learn4', { finalModels: ['gpt'] })[3].models.join() === 'haiku,sonnet');
+const po = buildPlan('open', { blockSize: 2, models: ['opus', 'haiku'] });
+check('open: a block of the chosen models, in order', po.length === 2 && po.every((p) => p.models.join() === 'haiku,opus' && p.editable));
+check('open: block size is clamped', buildPlan('open', { blockSize: 40 }).length === 6 && buildPlan('open', { blockSize: 0 }).length === 3);
+const rec = { mode: 'open', plan: po, rounds: [{}] };
+check('a started round cannot change', Boolean(setRoundModels(rec, 1, ['sonnet'])));
+check('a future round can', setRoundModels(rec, 2, ['sonnet']) === null && po[1].models.join() === 'sonnet');
+check('an empty choice is refused', Boolean(setRoundModels(rec, 2, [])));
+extendPlan(po, 2);
+check('open: more rounds carry the last models', po.length === 4 && po[3].models.join() === 'sonnet' && po[3].number === 4);
+for (let i = 0; i < 10; i++) extendPlan(po, 6);
+check(`open: never more than ${MAX_ROUNDS} rounds`, po.length === MAX_ROUNDS);
+check('old activities become the four-round mode', ensurePlan({ rounds: [] }).plan.length === 4);
+check('Opus is told open play does not learn', describeActivity({ mode: 'open', plan: po, rounds: [{ number: 1, models: ['haiku'] }] }).setup.includes('did NOT learn'));
+check('Opus is told which models were switched off', describeActivity({ mode: 'learn4', plan: buildPlan('learn4', { finalModels: ['opus'] }), rounds: [] }).setup.includes('Haiku and Sonnet were switched off'));
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures ? 1 : 0);

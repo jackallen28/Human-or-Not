@@ -82,6 +82,8 @@ fs.copyFileSync(fs.readdirSync(dataDir).filter((f) => f.startsWith('cards') && f
 await t.click('[data-tab="activities"]');
 await t.fill('#act-name', 'Preservice teachers — week 6');
 await t.selectOption('#act-duration', '180');
+await sleep(200);
+await shot(t, 'activity-modes', { fullPage: true });
 await t.click('#act-start');
 await t.waitForSelector('#live-lobby:not(.hidden)');
 
@@ -179,6 +181,39 @@ for (let i = 4; i < count; i++) {
   if (/findings/i.test(kicker)) await slide(i, 'overview-findings', 3200);
 }
 void titles;
+
+// ------------------------------------------------------------- open play
+await emit(watcher, 'live:finish', {});
+await fetch(`${URL}/api/activities`, {
+  method: 'POST', headers: { 'content-type': 'application/json', 'x-teacher-code': CODE },
+  body: JSON.stringify({ classId: cls.id, name: 'Open play — Friday', durationSec: 180, mode: 'open', blockSize: 2, models: ['haiku', 'sonnet', 'opus'] }),
+});
+for (const s of full.students.slice(1)) await emit(kids[s.n], 'student:join', { code: s.code });
+await sleep(400);
+for (let round = 1; round <= 2; round++) {
+  if (round === 2) await emit(watcher, 'live:setModels', { models: ['opus'] });
+  await emit(watcher, 'live:startRound', {});
+  await sleep(300);
+  for (const sock of Object.values(kids)) await emit(sock, 'chat:send', { text: LINES[sent++ % LINES.length] });
+  await sleep(1500);
+  await emit(watcher, 'live:endRound', {});
+  await sleep(200);
+  let fooledLeft = round;
+  for (const st of view.students.filter((x) => x.inRound)) {
+    const guess = st.partner === 'ai' ? (fooledLeft-- > 0 ? 'human' : 'ai') : 'human';
+    if (kids[st.n]) await emit(kids[st.n], 'guess', { guess });
+  }
+  await emit(watcher, 'live:results', {});
+  await sleep(300);
+  if (round === 1) {
+    await t.waitForSelector('#live-results:not(.hidden)');
+    await sleep(800);
+    await shot(t, 'open-play-results', { fullPage: true });
+  }
+}
+await t.waitForSelector('#btn-more:not(.hidden)');
+await sleep(600);
+await shot(t, 'open-play-keep-going', { fullPage: true });
 
 await browser.close();
 watcher.close();

@@ -130,6 +130,7 @@
     for (const el of document.querySelectorAll('.join-url')) el.textContent = meta.joinUrl;
     $('live-url').textContent = meta.joinUrl;
     renderPersonaSets();
+    renderModes();
   }
 
   function renderSteps() {
@@ -355,6 +356,61 @@
 
   // ----------------------------------------------------------- activities
 
+  const FAMILIES = ['haiku', 'sonnet', 'opus'];
+  const famName = (f) => f[0].toUpperCase() + f.slice(1);
+  const famList = (fams) => fams.map(famName).join(', ').replace(/, ([^,]*)$/, ' and $1');
+
+  /** Three checkboxes, one per model. At least one stays ticked. */
+  function modelPicker(host, selected, onChange) {
+    const key = selected.join(',');
+    if (host.dataset.key === key) return;
+    host.dataset.key = key;
+    host.innerHTML = FAMILIES.map((f) => `
+      <label class="persona ${selected.includes(f) ? '' : 'off'}" style="flex:0 0 auto;min-width:120px">
+        <input type="checkbox" data-fam="${f}" ${selected.includes(f) ? 'checked' : ''}>
+        <div class="name">${famName(f)}</div></label>`).join('');
+    for (const box of host.querySelectorAll('[data-fam]')) box.addEventListener('change', () => {
+      const next = FAMILIES.filter((f) => host.querySelector(`[data-fam="${f}"]`).checked);
+      if (!next.length) { box.checked = true; flash('Keep at least one model.'); return; }
+      host.dataset.key = '';
+      modelPicker(host, next, onChange);
+      onChange(next);
+    });
+  }
+
+  let chosenMode = 'learn4';
+  let finalModels = ['haiku', 'sonnet'];
+  let openModels = [...FAMILIES];
+
+  function renderModes() {
+    if (!meta?.modes) return;
+    $('mode-pick').innerHTML = meta.modes.map((m) => `
+      <label class="persona ${m.id === chosenMode ? '' : 'off'}">
+        <input type="radio" name="mode" value="${m.id}" ${m.id === chosenMode ? 'checked' : ''}>
+        <div><div class="name">${esc(m.label)}</div><div class="tiny muted">${esc(m.description)}</div></div>
+      </label>`).join('');
+    for (const r of document.querySelectorAll('input[name="mode"]')) r.addEventListener('change', () => { chosenMode = r.value; renderModes(); });
+    const extra = $('mode-extra');
+    if (chosenMode === 'learn4') {
+      extra.innerHTML = `<div class="field"><label>Models in round 4 <span class="muted small">— students are not told</span></label>
+        <div class="row" id="final-models" style="gap:8px"></div><p class="small muted" id="final-note" style="margin:6px 0 0"></p></div>`;
+      const note = () => {
+        const off = FAMILIES.filter((f) => !finalModels.includes(f));
+        $('final-note').textContent = off.length ? `${famList(off)} quietly switched off in round 4. You can still change this before round 4 starts.` : 'All three models stay on: round 4 tests whether the learning holds.';
+      };
+      modelPicker($('final-models'), finalModels, (next) => { finalModels = next; note(); });
+      note();
+    } else if (chosenMode === 'open') {
+      extra.innerHTML = `<div class="grid2">
+        <div class="field"><label for="act-block">Rounds at a time</label>
+          <select id="act-block">${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}" ${n === 3 ? 'selected' : ''}>${n} round${n === 1 ? '' : 's'}</option>`).join('')}</select>
+          <div class="tiny muted" style="margin-top:4px">After each block you can keep going (up to ${meta.maxRounds || 12} rounds) or show the overview.</div></div>
+        <div class="field"><label>Models to start with</label><div class="row" id="open-models" style="gap:8px"></div>
+          <div class="tiny muted" style="margin-top:4px">Change them between rounds.</div></div></div>`;
+      modelPicker($('open-models'), openModels, (next) => { openModels = next; });
+    } else extra.innerHTML = '';
+  }
+
   $('act-ratio').addEventListener('input', () => { $('act-ratio-label').textContent = `${$('act-ratio').value}%`; });
 
   $('act-start').addEventListener('click', async () => {
@@ -365,6 +421,10 @@
         name: $('act-name').value.trim(),
         durationSec: Number($('act-duration').value),
         aiRatio: Number($('act-ratio').value) / 100,
+        mode: chosenMode,
+        finalModels,
+        models: openModels,
+        blockSize: chosenMode === 'open' ? Number($('act-block').value) : undefined,
       } });
       $('act-name').value = '';
       showTab('live');
@@ -378,11 +438,11 @@
     host.innerHTML = activities.length ? activities.map((a) => `
       <div class="list-item">
         <div style="flex:1 1 320px"><div class="title">${esc(a.name)} <span class="pill ${a.status === 'finished' ? 'human' : a.status === 'live' ? 'on' : 'warn'}">${esc(a.status)}</span></div>
-          <div class="small muted">${esc(a.className)} · ${new Date(a.createdAt).toLocaleString()} · ${a.rounds}/4 rounds
+          <div class="small muted">${esc(a.className)} · ${new Date(a.createdAt).toLocaleString()} · ${esc(a.mode)} · ${a.rounds}/${a.planned} rounds
             ${a.fooled.length ? ` · AI passed as human: ${a.fooled.map((f, i) => `R${i + 1} ${pct(f)}`).join(', ')}` : ''}</div></div>
         <div class="shrink row">
           ${a.status === 'live' ? '<button class="small" data-golive="1">Open live view</button>' : ''}
-          ${a.rounds === 4 ? `<button class="ghost small" data-ov="${a.id}">▶ Overview</button>` : ''}
+          ${a.hasOverview ? `<button class="ghost small" data-ov="${a.id}">▶ Overview</button>` : ''}
           ${a.rounds ? `<button class="small" data-zip="${a.id}">⬇ ZIP</button>` : ''}
           ${a.status !== 'live' ? `<button class="danger small" data-delact="${a.id}">Delete</button>` : ''}
         </div></div>`).join('') : '<p class="muted small">None yet.</p>';
@@ -425,8 +485,8 @@
 
   // ----------------------------------------------------------------- live
 
-  function command(event) {
-    return new Promise((resolve) => socket.emit(event, {}, (res) => {
+  function command(event, payload = {}) {
+    return new Promise((resolve) => socket.emit(event, payload, (res) => {
       if (res && res.ok === false) flash(res.error);
       resolve(res);
     }));
@@ -435,7 +495,10 @@
   $('btn-start-1').addEventListener('click', () => command('live:startRound'));
   $('btn-end').addEventListener('click', () => command('live:endRound'));
   $('btn-results').addEventListener('click', () => command('live:results'));
-  $('btn-next').addEventListener('click', () => command(live?.roundNumber >= 4 ? 'live:overview' : 'live:startRound'));
+  $('btn-next').addEventListener('click', () => command(live && live.roundNumber >= live.roundCount ? 'live:overview' : 'live:startRound'));
+  $('btn-more').addEventListener('click', () => command('live:moreRounds'));
+  const nextPlan = () => (live && live.roundNumber < live.roundCount ? live.plan[live.roundNumber] : null);
+  const setNextModels = (models) => command('live:setModels', { models });
   $('btn-zip-live').addEventListener('click', () => live && download(`/activities/${live.id}/zip`, 'activity.zip'));
   $('btn-zip-done').addEventListener('click', () => lastLiveId && download(`/activities/${lastLiveId}/zip`, 'activity.zip'));
   $('btn-finish').addEventListener('click', async () => {
@@ -475,15 +538,19 @@
       $('lobby-of').textContent = live.classSize;
       $('lobby-chips').innerHTML = students.map((s) => `<div class="chip ${s.connected ? '' : 'off'}">${esc(s.label)}</div>`).join('');
       $('btn-start-1').disabled = !students.some((s) => s.connected);
+      const first = nextPlan();
+      $('lobby-models').classList.toggle('hidden', !first?.editable);
+      if (first?.editable) modelPicker($('lobby-models-pick'), first.models, setNextModels);
     }
 
     if (live.phase === 'active') {
-      $('active-label').textContent = `Round ${live.roundNumber} of 4`;
+      $('active-label').textContent = `Round ${live.roundNumber} of ${live.roundCount}`;
       const inRound = students.filter((s) => s.inRound);
       $('active-students').textContent = inRound.length;
       $('active-ai').textContent = inRound.filter((s) => s.partner === 'ai').length;
       $('active-messages').textContent = inRound.reduce((n, s) => n + s.messages, 0);
-      $('active-secret').textContent = live.roundNumber === 4 ? 'Opus is switched off this round. Don\'t tell the students.' : '';
+      const off = FAMILIES.filter((f) => !(live.round?.models || FAMILIES).includes(f));
+      $('active-secret').textContent = live.round?.secret && off.length ? `${famList(off)} ${off.length === 1 ? 'is' : 'are'} switched off this round. Don't tell the students.` : '';
       startClock();
     } else stopClock();
 
@@ -544,13 +611,30 @@
           <div><h3>What gave the AI away</h3>${list(a.aiTells, (x) => `<li>${esc(x.tell)} <span class="muted">“${esc(x.evidence)}”</span></li>`)}</div>
           <div><h3>How students tried to catch it</h3>${list(a.studentStrategies, (x) => `<li>${esc(x)}</li>`)}</div>
         </div>
-        ${r.number < 4 ? `<h3>What the AI will do differently next round</h3>${list(a.guidance, (x) => `<li>${esc(x)}</li>`)}` : ''}`;
+        ${r.number < live.roundCount ? `<h3>What the AI will do differently next round</h3>${list(a.guidance, (x) => `<li>${esc(x)}</li>`)}` : ''}`;
     }
-    const analysing = ['running', 'pending'].includes(r.analysisStatus);
+    $('analysis-card').classList.toggle('hidden', !live.mode.learning);
+    const analysing = live.mode.learning && ['running', 'pending'].includes(r.analysisStatus);
+    const done = live.roundNumber >= live.roundCount;
+    const next = nextPlan();
+    const canMore = live.mode.id === 'open' && done && live.roundCount < live.maxRounds;
     $('btn-next').disabled = analysing;
-    $('btn-next').textContent = r.number >= 4 ? 'Show the overview of all four rounds →' : `Start round ${r.number + 1} →`;
+    $('btn-next').textContent = done ? `Show the overview of ${live.roundCount === 2 ? "both" : `all ${live.roundCount}`} rounds →` : `Start round ${r.number + 1} →`;
+    $('btn-more').classList.toggle('hidden', !canMore);
+    $('btn-more').textContent = `Play ${Math.min(live.blockSize || 1, live.maxRounds - live.roundCount)} more round${(live.blockSize || 1) === 1 ? '' : 's'}`;
+    $('next-models-card').classList.toggle('hidden', !next?.editable);
+    if (next?.editable) {
+      $('next-models-title').textContent = `Models for round ${next.number}`;
+      modelPicker($('next-models'), next.models, setNextModels);
+      const off = FAMILIES.filter((f) => !next.models.includes(f));
+      $('next-models-note').textContent = live.mode.id === 'open'
+        ? 'No learning between rounds in open play — change the models to see what difference they make.'
+        : off.length ? `${famList(off)} will be quietly switched off. Students are not told.` : 'All three models stay on.';
+    }
+    const offNext = next ? FAMILIES.filter((f) => !next.models.includes(f)) : [];
     $('next-note').textContent = analysing ? 'Ready as soon as Opus has finished — usually under a minute.'
-      : r.number === 3 ? 'Round 4 quietly switches Opus off.' : '';
+      : next?.secret && offNext.length && live.mode.learning ? `Round ${next.number} quietly switches ${famList(offNext)} off.`
+        : canMore ? 'Keep going, or show the overview to finish.' : '';
   }
 
   function startClock() {

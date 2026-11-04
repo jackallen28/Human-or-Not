@@ -20,7 +20,7 @@ gave the AI away, and quietly teaches it to do better. Round 1 it's polite, curi
 catch. By round 3 it's complaining about the TPA, admitting it zoned out in the lecture, and
 playing along with your class's in-jokes.
 
-Then, in round 4, Opus is switched off. **Nobody tells the students.**
+Then, if you choose, a fourth round with Opus switched off. **Nobody tells the students.**
 
 <p align="center">
   <img src="docs/screenshots/overview-chart.png" alt="Pass rate by round: 25%, 50%, 75%, then 50% with Opus off" width="100%">
@@ -60,6 +60,26 @@ no names on screen.
 
 <p align="center"><img src="docs/screenshots/login-cards.png" alt="Printable login cards" width="55%"></p>
 
+### Choose how to play
+
+<p align="center"><img src="docs/screenshots/activity-modes.png" alt="Choosing a mode when starting an activity" width="90%"></p>
+
+| Mode | Rounds | Learning? | Models |
+|---|---|---|---|
+| **Three rounds, learning** | 3 | Opus teaches the AI after every round | Haiku, Sonnet and Opus every round |
+| **Four rounds, learning, then a switch** | 4 | After rounds 1–3 | All three in rounds 1–3; round 4 uses the models you pick (Opus off by default). Students aren't told. |
+| **Open play** | A block of 1–6 at a time, then *keep going* (up to 12) | None. The AI works from the class brief every round | You choose the models for every round, between rounds |
+
+Open play is the quick one: no analysis, so it's fast and cheap. It's also a fair test of
+the models side by side, because nothing changes between rounds except the models you pick.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/open-play-results.png" alt="Open play: choosing the models for the next round"><br><sub>Open play: pick the models for the next round right on the results screen.</sub></td>
+    <td width="50%"><img src="docs/screenshots/open-play-keep-going.png" alt="Open play: keep going or show the overview"><br><sub>End of a block: play more rounds, or show the overview.</sub></td>
+  </tr>
+</table>
+
 ### In class — project the console, hand out the cards
 
 <p align="center"><img src="docs/screenshots/lobby.png" alt="The lobby filling up as students join" width="90%"></p>
@@ -88,7 +108,7 @@ Students start adapting too. It becomes an arms race, and they can see it.
 
 ### The finale — an animated story of your class vs the machine
 
-After round 4, Opus writes a one-off presentation of the whole activity. Same design every
+After the last round, Opus writes a one-off presentation of the whole activity. Same design every
 time; every word written for *this* class.
 
 <table>
@@ -118,7 +138,8 @@ carries into your next class, so it starts smarter every time.
 
 - **It's about them.** The AI isn't generic — it's trained on their unit, their in-jokes, their way of writing.
 - **The learning is visible.** Students watch the AI get better *because of what they did*.
-- **Round 4 is a lesson on its own.** Does the "best" model matter, or does context matter more?
+- **The model switch is a lesson on its own.** Does the "best" model matter, or does context matter more?
+- **Three ways to play.** Learning over three rounds, a secret model switch in round 4, or open play for as long as the class wants.
 - **It's honest.** Students are told up front an AI might be involved. No personal details, ever. If anyone is distressed, the AI drops the act and points them to you.
 - **It costs almost nothing.** Free hosting; a few US dollars of API credit for a class of 25.
 
@@ -185,28 +206,34 @@ so they can be read aloud.
 ### 3 · Start an activity
 
 Pick the class, name the activity (e.g. *"Preservice teachers — week 6"*), choose a round
-length, and press **Start**. Project the console. Students go to your Render address, type
+length and a mode (see *Choose how to play* above), and press **Start**. Project the console. Students go to your Render address, type
 their code, read a four-sentence notice, and wait.
 
-### 4 · Four rounds
+### 4 · The rounds
+
+The default, **four rounds, learning, then a switch**:
 
 | Round | AI partners | What they know |
 |---|---|---|
 | 1 | Haiku, Sonnet, Opus | Your class brief |
 | 2 | Haiku, Sonnet, Opus | + what Opus learned from round 1 |
 | 3 | Haiku, Sonnet, Opus | + what Opus learned from rounds 1–2 |
-| 4 | Haiku, Sonnet | Opus switched off. **Students are not told.** |
+| 4 | Haiku, Sonnet (or whichever models you pick) | Opus switched off. **Students are not told.** |
+
+**Three rounds, learning** is rounds 1–3 on their own. In **open play** every round works
+from the class brief alone, with the models you pick. Opus does not analyse the rounds, and
+you add more rounds a block at a time.
 
 Each round: students are paired at random — about half with a classmate, half with the AI,
 which models shared evenly — they chat until the clock runs out, then guess. Results appear
 as soon as everyone has guessed (or when you press *Show results*). While you talk through
-them, **Claude Opus reads every conversation** and writes what gave the AI away, how
+them, in the learning modes, **Claude Opus reads every conversation** and writes what gave the AI away, how
 students tried to catch it, what they were interested in, and new instructions for the next
 round. All of it is shown on screen and saved.
 
-After round 4, Opus writes an **animated overview** of the whole activity: the pass rate
-round by round and model by model, what the AI learned, the story of how it adapted to this
-class, the effect of switching Opus off, quotes from the chats, findings and discussion
+After the last round, Opus writes an **animated overview** of the whole activity: the pass
+rate round by round and model by model, what the AI learned (in the learning modes), the
+story of the activity, what the model switch or the model mix did, quotes from the chats, findings and discussion
 questions. Same presentation every time; its content is written fresh for each class.
 
 What an activity learns is also saved to the class context, so the **next** activity with
@@ -232,7 +259,7 @@ Then a chat window with a countdown, two buttons to guess, and whether they were
 
 | | |
 |---|---|
-| `report.html` | Start here: the four rounds, all findings, every transcript. Prints to PDF. |
+| `report.html` | Start here: every round, all findings, every transcript. Prints to PDF. |
 | `overview/overview.html` | The animated overview. Opens offline in any browser — show it again, share it. |
 | `overview/overview.json` | The overview content Opus wrote, as data. |
 | `analysis/round-N.md` / `.json` | What Opus found after each round and the guidance it gave the AI. |
@@ -260,8 +287,8 @@ contexts, classes and activities when the service sleeps. Render's free database
 permanently. Without a database the console warns you that nothing is being kept.
 
 **What it costs.** You pay Anthropic for what the AI uses; Render is free. As a rough
-guide, a class of 25 across four rounds uses a few US dollars of API credit — most of it
-Opus, which thinks hardest. Smaller classes and shorter rounds cost less. Check
+guide, a class of 25 across four learning rounds uses a few US dollars of API credit — most of it
+Opus, which thinks hardest. Smaller classes and shorter rounds cost less, and open play skips the analysis entirely. Check
 *Usage* in the Anthropic console after your first run, and set a spend limit.
 
 **Models.** The console uses the newest Haiku, Sonnet and Opus your API key can access,
@@ -298,7 +325,7 @@ npm test
 ```
 
 Runs unit checks, then a complete activity — training, a class, four rounds with
-analysis, the overview, the download, backup and restore — against a stand-in for the
+analysis, then the three-round and open-play modes, the overview, the download, backup and restore — against a stand-in for the
 Claude API, so no key or credit is needed.
 
 The screenshots in `docs/screenshots` are produced the same way — a full demo activity
@@ -313,7 +340,8 @@ node test/screenshots.mjs
 ```
 server/
   index.js      web server, teacher API, live websocket
-  activity.js   the four-round engine: pairing, chat, guesses, results
+  activity.js   the round engine: pairing, chat, guesses, results
+  modes.js      the three ways to play and their round plans
   bot.js        the AI classmate: briefing, rules, pacing
   analysis.js   Opus: training, per-round analysis, the overview story
   claude.js     model discovery, effort, the API wrapper

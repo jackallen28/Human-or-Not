@@ -40,21 +40,22 @@
     <div class="card">
       <h2>Welcome</h2>
       <p class="muted">Students chat with either a classmate or an AI pretending to be one, then guess which.
-        Over four rounds the AI studies your class and gets harder to catch. Here is the whole set-up:</p>
+        Round by round the AI studies your class and gets harder to catch — or you play on and swap the models yourself. Here is the whole set-up:</p>
       <div class="steps" id="steps">
         <div class="step" data-step="train"><div class="n">Step 1</div><strong>Train the AI</strong><div class="small muted">Download the context files, fill them in with any AI tool, upload them.</div></div>
         <div class="step" data-step="classes"><div class="n">Step 2</div><strong>Set up a class</strong><div class="small muted">Name it, choose a student type, print the login cards.</div></div>
         <div class="step" data-step="activities"><div class="n">Step 3</div><strong>Start an activity</strong><div class="small muted">Pick the class, name the activity, project the console.</div></div>
-        <div class="step" data-step="live"><div class="n">Step 4</div><strong>Run four rounds</strong><div class="small muted">The AI learns after each one. Then the overview, then the download.</div></div>
+        <div class="step" data-step="live"><div class="n">Step 4</div><strong>Run the rounds</strong><div class="small muted">Three ways to play. Then the overview, then the download.</div></div>
       </div>
     </div>
     <div class="card">
-      <h2>How the four rounds work</h2>
+      <h2>Three ways to play</h2>
       <div class="grid2">
         <div>
-          <p class="small"><strong>Rounds 1–3</strong> use the latest Claude <strong>Haiku</strong>, <strong>Sonnet</strong> and <strong>Opus</strong>, shared evenly among the students paired with an AI.
+          <p class="small"><strong>Three rounds, learning.</strong> The latest Claude <strong>Haiku</strong>, <strong>Sonnet</strong> and <strong>Opus</strong> every round, shared evenly among the students paired with an AI.
             After each round, Opus reads every conversation and teaches the AI what gave it away.</p>
-          <p class="small"><strong>Round 4</strong> quietly switches Opus off. Students are not told. The overview shows what difference it made.</p>
+          <p class="small"><strong>Four rounds, learning, then a switch.</strong> The same three learning rounds, then a fourth with the models you choose — by default Opus quietly switched off. Students are not told.</p>
+          <p class="small"><strong>Open play.</strong> A few rounds at a time, as many as you like. No learning between rounds — instead you choose which models play each round.</p>
         </div>
         <div class="small muted" id="model-list"></div>
       </div>
@@ -149,7 +150,8 @@
         <div class="field"><label for="act-ratio">Students paired with the AI each round — <span id="act-ratio-label">50%</span></label>
           <input id="act-ratio" type="range" min="30" max="70" step="10" value="50" style="padding:0"></div>
       </div>
-      <p class="small muted">Four rounds, always: 1–3 with Haiku, Sonnet and Opus, learning after each; 4 with Opus quietly switched off.</p>
+      <div class="field"><label>How do you want to play?</label><div class="persona-grid" id="mode-pick"></div></div>
+      <div id="mode-extra"></div>
       <button id="act-start" class="big">Start activity →</button>
       <div id="act-error" class="error"></div>
     </div>
@@ -175,6 +177,10 @@
         <p class="muted">Go to <strong class="join-url"></strong> and enter the code on your card.</p>
         <div class="bignum"><span id="lobby-count">0</span><span class="muted" style="font-size:1.4rem"> / <span id="lobby-of">0</span></span></div>
         <div class="chips" id="lobby-chips" style="margin:16px 0"></div>
+        <div id="lobby-models" class="hidden" style="margin:0 auto 16px;max-width:520px">
+          <div class="small muted" style="margin-bottom:6px">Models for round 1</div>
+          <div class="row" id="lobby-models-pick" style="gap:8px;justify-content:center"></div>
+        </div>
         <button id="btn-start-1" class="big">Start round 1 →</button>
       </div>
     </div>
@@ -220,10 +226,16 @@
         <div class="pairs" id="res-pairs"></div>
       </div>
       <div class="card" id="analysis-card">
-        <h3>What Opus learned from this round</h3>
+        <h3 id="analysis-title">What Opus learned from this round</h3>
         <div id="analysis-body"></div>
       </div>
+      <div class="card hidden" id="next-models-card">
+        <h3 id="next-models-title">Models for the next round</h3>
+        <div class="row" id="next-models" style="gap:8px"></div>
+        <p class="small muted" id="next-models-note" style="margin:8px 0 0"></p>
+      </div>
       <div class="center" style="margin-top:18px">
+        <button id="btn-more" class="big ghost hidden">Play more rounds</button>
         <button id="btn-next" class="big">Start the next round →</button>
         <div class="small muted" id="next-note" style="margin-top:8px"></div>
       </div>
