@@ -1,13 +1,128 @@
-# Human or Not?
+<p align="center">
+  <img src="docs/screenshots/overview-title.png" alt="The end-of-activity overview: EDU3001 vs the machine" width="100%">
+</p>
 
-**A classroom Turing test that learns your class.** Students chat for a few minutes with
-someone — a classmate, or Claude pretending to be one — and then guess which. Over four
-rounds the AI studies your students and gets harder to catch. At the end, an animated
-overview shows the class how it learned, and what happened when its most capable model
-was quietly switched off.
+<h1 align="center">Human or Not?</h1>
 
-Built for any educator: secondary classes (Years 9–12) or preservice teachers. No coding.
-It runs on Render's free plan with your own Claude API key.
+<p align="center"><b>A classroom Turing test that learns your class — and then shows them how it did it.</b></p>
+
+<p align="center">
+  Free to host on Render · Your own Claude API key · No coding · Years 9–12 or preservice teachers
+</p>
+
+---
+
+Your students chat for three minutes with *someone*. A classmate across the room — or Claude,
+pretending to be one. Then they guess.
+
+Here's the twist: **after every round, Claude Opus reads every conversation**, works out what
+gave the AI away, and quietly teaches it to do better. Round 1 it's polite, curious and easy to
+catch. By round 3 it's complaining about the TPA, admitting it zoned out in the lecture, and
+playing along with your class's in-jokes.
+
+Then, in round 4, Opus is switched off. **Nobody tells the students.**
+
+<p align="center">
+  <img src="docs/screenshots/overview-chart.png" alt="Pass rate by round: 25%, 50%, 75%, then 50% with Opus off" width="100%">
+  <br><sub><i>A tutorial of eight. In round 1 the AI fooled one in four of the students who chatted with it — by round 3, three in four.</i></sub>
+</p>
+
+It's the most memorable way we know to start a conversation about AI, authorship and
+assessment — because the evidence is the students' own chats.
+
+---
+
+## What a lesson looks like
+
+### Before class — train it on *your* students
+
+Download three short templates, fill them in with any AI tool and your unit plan, and upload.
+Opus reads them, writes the brief every AI "classmate" works from, and tells you exactly what
+would make it harder to catch.
+
+<p align="center"><img src="docs/screenshots/train.png" alt="Training the AI on the class context" width="90%"></p>
+
+### Pick who the AI pretends to be
+
+Two persona sets written for real Australian classrooms. Untick anyone you don't want.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/personas-secondary.png" alt="Years 9–12 personas"><br><b>Years 9–12</b> — the ATAR grinder, the checked-out one, the class clown, the quiet thinker, the confident arguer, the distracted multitasker, the VET kid.</td>
+    <td width="50%"><img src="docs/screenshots/personas-preservice.png" alt="Preservice teacher personas"><br><b>Preservice teachers (20–30)</b> — the career changer, the prac survivor, the theory enthusiast, the anxious perfectionist, the laid-back one, the critical sceptic, the early adopter.</td>
+  </tr>
+</table>
+
+### Print the login cards
+
+Name the class, say how many students — get a PDF of cut-out cards. No accounts, no emails,
+no names on screen.
+
+<p align="center"><img src="docs/screenshots/login-cards.png" alt="Printable login cards" width="55%"></p>
+
+### In class — project the console, hand out the cards
+
+<p align="center"><img src="docs/screenshots/lobby.png" alt="The lobby filling up as students join" width="90%"></p>
+
+Students type their code on their phone, read a four-sentence notice, and wait. Press start.
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/screenshots/student-join.png" alt="Student joins with a code" width="230"><br><sub>Join with a code</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/student-chat.png" alt="Chatting — is this a classmate?" width="230"><br><sub>Chat… with whom?</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/student-result.png" alt="The reveal" width="230"><br><sub>Guess, then the reveal</sub></td>
+  </tr>
+</table>
+
+<sub>That chat on the left? The grey bubbles are Claude, in round 2, already sounding like someone who survived prac.</sub>
+
+<p align="center"><img src="docs/screenshots/live-round.png" alt="The live round on the projector" width="90%"></p>
+
+### After each round — the class sees what gave it away
+
+<p align="center"><img src="docs/screenshots/results.png" alt="Round results and Opus's analysis" width="90%"></p>
+
+While you talk through the results, Opus writes up the AI's tells, the strategies students
+used, what they were interested in — and the new instructions the AI gets for next round.
+Students start adapting too. It becomes an arms race, and they can see it.
+
+### The finale — an animated story of your class vs the machine
+
+After round 4, Opus writes a one-off presentation of the whole activity. Same design every
+time; every word written for *this* class.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/overview-story.png" alt="How it learned — the story"></td>
+    <td width="50%"><img src="docs/screenshots/overview-opus.png" alt="What happened when Opus was switched off"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/overview-models.png" alt="Pass rate by model"></td>
+    <td width="50%"><img src="docs/screenshots/overview-learning.png" alt="What the AI learned"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/overview-quotes.png" alt="Quotes from the chats"></td>
+    <td width="50%"><img src="docs/screenshots/overview-findings.png" alt="Key findings"></td>
+  </tr>
+</table>
+
+### Afterwards — keep everything
+
+One click downloads a ZIP: a printable report, the animated overview (works offline), every
+transcript, CSVs for your own analysis, and what Opus learned. What the AI learned also
+carries into your next class, so it starts smarter every time.
+
+---
+
+## Why educators use it
+
+- **It's about them.** The AI isn't generic — it's trained on their unit, their in-jokes, their way of writing.
+- **The learning is visible.** Students watch the AI get better *because of what they did*.
+- **Round 4 is a lesson on its own.** Does the "best" model matter, or does context matter more?
+- **It's honest.** Students are told up front an AI might be involved. No personal details, ever. If anyone is distressed, the AI drops the act and points them to you.
+- **It costs almost nothing.** Free hosting; a few US dollars of API credit for a class of 25.
+
+<p align="center"><img src="docs/screenshots/console-home.png" alt="The teacher console home page" width="90%"><br><sub>The teacher console walks you through it in four steps.</sub></p>
 
 ---
 
@@ -34,9 +149,9 @@ That is the whole set-up. Updates you push to your fork deploy automatically.
 
 ---
 
-## Using it
+## The detail
 
-The teacher console walks you through four steps.
+Everything above, step by step.
 
 ### 1 · Train the AI on your class
 
@@ -185,6 +300,13 @@ npm test
 Runs unit checks, then a complete activity — training, a class, four rounds with
 analysis, the overview, the download, backup and restore — against a stand-in for the
 Claude API, so no key or credit is needed.
+
+The screenshots in `docs/screenshots` are produced the same way — a full demo activity
+against a stand-in API, driven in a headless browser:
+
+```bash
+node test/screenshots.mjs
+```
 
 ## How it is built
 
