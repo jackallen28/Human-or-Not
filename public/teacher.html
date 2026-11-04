@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Human or Not? — Teacher console</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎛️</text></svg>">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/overview.css">
+</head>
+<body>
+
+<!-- ============================================================== sign in -->
+<section id="screen-auth" class="wrap">
+  <div class="card narrow" style="margin-top:12vh">
+    <h1>Teacher console</h1>
+    <p class="muted small">Enter the teacher code you set when you deployed the app (<code>TEACHER_CODE</code> in Render).</p>
+    <div class="field"><input id="auth-code" type="password" autocomplete="current-password" placeholder="Teacher code"></div>
+    <button id="auth-btn" style="width:100%">Open the console</button>
+    <div id="auth-error" class="error"></div>
+  </div>
+</section>
+
+<section id="screen-app" class="wrap hidden">
+  <div class="topbar">
+    <div class="brand"><h1>Human or Not?</h1><span class="small muted">Teacher console</span></div>
+    <nav class="nav" id="nav">
+      <button data-tab="home" class="on">Home</button>
+      <button data-tab="train"><span class="num">1</span>Train the AI</button>
+      <button data-tab="classes"><span class="num">2</span>Classes</button>
+      <button data-tab="activities"><span class="num">3</span>Activities</button>
+      <button data-tab="live" id="nav-live" class="hidden">● Live</button>
+    </nav>
+  </div>
+  <div id="banners" class="stack" style="margin-bottom:16px"></div>
+  <div id="flash" class="small" style="margin:-6px 0 10px;min-height:1.2em;color:var(--accent-2)"></div>
+
+  <!-- ============================================================ home -->
+  <div data-page="home">
+    <div class="card">
+      <h2>Welcome</h2>
+      <p class="muted">Students chat with either a classmate or an AI pretending to be one, then guess which.
+        Over four rounds the AI studies your class and gets harder to catch. Here is the whole set-up:</p>
+      <div class="steps" id="steps">
+        <div class="step" data-step="train"><div class="n">Step 1</div><strong>Train the AI</strong><div class="small muted">Download the context files, fill them in with any AI tool, upload them.</div></div>
+        <div class="step" data-step="classes"><div class="n">Step 2</div><strong>Set up a class</strong><div class="small muted">Name it, choose a student type, print the login cards.</div></div>
+        <div class="step" data-step="activities"><div class="n">Step 3</div><strong>Start an activity</strong><div class="small muted">Pick the class, name the activity, project the console.</div></div>
+        <div class="step" data-step="live"><div class="n">Step 4</div><strong>Run four rounds</strong><div class="small muted">The AI learns after each one. Then the overview, then the download.</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>How the four rounds work</h2>
+      <div class="grid2">
+        <div>
+          <p class="small"><strong>Rounds 1–3</strong> use the latest Claude <strong>Haiku</strong>, <strong>Sonnet</strong> and <strong>Opus</strong>, shared evenly among the students paired with an AI.
+            After each round, Opus reads every conversation and teaches the AI what gave it away.</p>
+          <p class="small"><strong>Round 4</strong> quietly switches Opus off. Students are not told. The overview shows what difference it made.</p>
+        </div>
+        <div class="small muted" id="model-list"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Your data</h2>
+      <p class="small muted" id="storage-line"></p>
+      <div class="row" style="align-items:center">
+        <div class="shrink"><button id="backup-btn" class="ghost">⬇ Back up everything</button></div>
+        <div class="shrink"><button id="restore-btn" class="ghost">⬆ Restore a backup</button></div>
+        <div><span class="small" id="backup-note"></span></div>
+      </div>
+      <input type="file" id="restore-file" accept=".json,application/json" class="hidden">
+    </div>
+  </div>
+
+  <!-- =========================================================== train -->
+  <div data-page="train" class="hidden">
+    <div class="card">
+      <h2>1 · Train the AI on your class</h2>
+      <p class="muted small">Three short Markdown files tell the AI who your students are, what they have learned and how they write.
+        Download them, open them in Claude, ChatGPT or any AI tool with your unit plan, ask it to fill them in, then upload them here.
+        <strong>The more context you give, the harder the AI is to catch.</strong></p>
+      <div class="row" style="align-items:center">
+        <div class="shrink"><a class="btn" href="/templates-all.zip" download>⬇ All three files (.zip)</a></div>
+        <div class="shrink"><a class="btn ghost small" href="/templates/01-about-the-class.md" download>01 About the class</a></div>
+        <div class="shrink"><a class="btn ghost small" href="/templates/02-what-we-have-learned.md" download>02 What we've learned</a></div>
+        <div class="shrink"><a class="btn ghost small" href="/templates/03-student-voice.md" download>03 Student voice</a></div>
+      </div>
+      <details class="small muted" style="margin-top:12px">
+        <summary>A prompt you can paste into your AI tool</summary>
+        <p style="margin-top:8px"><code>Here are three template files for a classroom activity, and my unit plan. Fill in every section of all three for my class. Keep every heading exactly as it is. Be specific and concrete — real examples, in-jokes, how my students actually write. Do not include any student's real name.</code></p>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Upload your completed files</h2>
+      <div class="field"><label for="ctx-name">Name this context</label><input id="ctx-name" placeholder="e.g. Year 10 Science — Ecosystems"></div>
+      <div class="grid3">
+        <div class="drop" data-slot="about"><div class="file">01 · About the class</div><div class="small muted">Required · click or drop .md</div></div>
+        <div class="drop" data-slot="learned"><div class="file">02 · What we've learned</div><div class="small muted">Required · click or drop .md</div></div>
+        <div class="drop" data-slot="voice"><div class="file">03 · Student voice</div><div class="small muted">Optional, but powerful</div></div>
+      </div>
+      <input type="file" id="ctx-file" accept=".md,.markdown,.txt,text/markdown,text/plain" class="hidden">
+      <p class="tiny muted" style="margin-top:10px">“Training” here means Claude Opus reads your files and writes a brief that every AI chat partner works from. The models themselves are not retrained.</p>
+      <button id="ctx-train" style="margin-top:6px">Train the AI →</button>
+      <div id="ctx-error" class="error"></div>
+    </div>
+
+    <div class="card">
+      <h2>Your class contexts</h2>
+      <div id="ctx-list"><p class="muted small">None yet.</p></div>
+    </div>
+  </div>
+
+  <!-- ========================================================= classes -->
+  <div data-page="classes" class="hidden">
+    <div class="card">
+      <h2>2 · Set up a class</h2>
+      <div class="grid2">
+        <div class="field"><label for="cls-name">Class name</label><input id="cls-name" placeholder="e.g. 10B Science, or EDU2001 Tutorial 3"></div>
+        <div class="field"><label for="cls-count">Number of students</label><input id="cls-count" type="number" min="1" max="60" value="25"></div>
+      </div>
+      <div class="field">
+        <label for="cls-context">Class context (from step 1)</label>
+        <select id="cls-context"></select>
+      </div>
+      <label>Who are the students? The AI will play one of these.</label>
+      <div class="grid2" id="set-pick"></div>
+      <div style="margin-top:12px"><label>Personas in play <span class="muted">(untick any you don't want)</span></label>
+        <div class="persona-grid" id="persona-pick"></div></div>
+      <button id="cls-create" style="margin-top:16px">Create class and login codes →</button>
+      <div id="cls-error" class="error"></div>
+    </div>
+    <div class="card">
+      <h2>Your classes</h2>
+      <div id="cls-list"><p class="muted small">None yet.</p></div>
+    </div>
+  </div>
+
+  <!-- ====================================================== activities -->
+  <div data-page="activities" class="hidden">
+    <div class="card">
+      <h2>3 · Start an activity</h2>
+      <div class="grid2">
+        <div class="field"><label for="act-class">Class</label><select id="act-class"></select></div>
+        <div class="field"><label for="act-name">Activity name</label><input id="act-name" placeholder="e.g. Preservice teachers — week 6"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="act-duration">Round length</label>
+          <select id="act-duration"><option value="120">2 minutes</option><option value="180" selected>3 minutes</option><option value="240">4 minutes</option><option value="300">5 minutes</option></select></div>
+        <div class="field"><label for="act-ratio">Students paired with the AI each round — <span id="act-ratio-label">50%</span></label>
+          <input id="act-ratio" type="range" min="30" max="70" step="10" value="50" style="padding:0"></div>
+      </div>
+      <p class="small muted">Four rounds, always: 1–3 with Haiku, Sonnet and Opus, learning after each; 4 with Opus quietly switched off.</p>
+      <button id="act-start" class="big">Start activity →</button>
+      <div id="act-error" class="error"></div>
+    </div>
+    <div class="card">
+      <h2>Past activities</h2>
+      <div id="act-list"><p class="muted small">None yet.</p></div>
+    </div>
+  </div>
+
+  <!-- ============================================================ live -->
+  <div data-page="live" class="hidden">
+    <div class="card" style="margin-bottom:16px">
+      <div class="row" style="align-items:center">
+        <div><h2 style="margin:0" id="live-name"></h2><div class="small muted" id="live-sub"></div></div>
+        <div class="shrink small muted">Students join at <strong id="live-url"></strong></div>
+      </div>
+      <div class="roundtrack" id="live-track" style="margin-top:14px"></div>
+    </div>
+
+    <div id="live-lobby" class="hidden">
+      <div class="card center">
+        <h2 style="margin:0">Students are logging in</h2>
+        <p class="muted">Go to <strong class="join-url"></strong> and enter the code on your card.</p>
+        <div class="bignum"><span id="lobby-count">0</span><span class="muted" style="font-size:1.4rem"> / <span id="lobby-of">0</span></span></div>
+        <div class="chips" id="lobby-chips" style="margin:16px 0"></div>
+        <button id="btn-start-1" class="big">Start round 1 →</button>
+      </div>
+    </div>
+
+    <div id="live-active" class="hidden">
+      <div class="card center">
+        <div class="small muted" style="text-transform:uppercase;letter-spacing:.08em" id="active-label"></div>
+        <div class="bigclock" id="clock">3:00</div>
+        <div class="stat-row" style="max-width:640px;margin:18px auto 0">
+          <div class="stat"><div class="n" id="active-students">0</div><div class="k">Chatting</div></div>
+          <div class="stat"><div class="n" id="active-ai">0</div><div class="k">With an AI</div></div>
+          <div class="stat"><div class="n" id="active-messages">0</div><div class="k">Messages</div></div>
+        </div>
+        <p id="active-secret" class="small" style="color:var(--warn);margin-top:16px"></p>
+        <button id="btn-end" class="ghost" style="margin-top:8px">End the round early</button>
+      </div>
+    </div>
+
+    <div id="live-guess" class="hidden">
+      <div class="card center">
+        <h2 style="margin:0">Time's up — students are guessing</h2>
+        <div class="bignum" id="guess-count">0/0</div>
+        <p class="muted small">Results appear by themselves once everyone has guessed.</p>
+        <button id="btn-results" class="big">Show results now →</button>
+      </div>
+    </div>
+
+    <div id="live-results" class="hidden">
+      <div class="card">
+        <h2 id="results-title"></h2>
+        <div class="stat-row">
+          <div class="stat"><div class="n" id="res-fooled">—</div><div class="k">AI passed as human</div></div>
+          <div class="stat"><div class="n" id="res-accuracy">—</div><div class="k">Class accuracy</div></div>
+          <div class="stat"><div class="n" id="res-human">—</div><div class="k">Classmates spotted</div></div>
+          <div class="stat"><div class="n" id="res-answered">—</div><div class="k">Guessed</div></div>
+        </div>
+        <div style="overflow-x:auto;margin-top:14px"><table>
+          <thead><tr><th>Model</th><th>Chats</th><th>Passed as human</th><th>Spotted</th><th>Pass rate</th></tr></thead>
+          <tbody id="res-models"></tbody></table></div>
+      </div>
+      <div class="card">
+        <h3>Who was talking to whom</h3>
+        <div class="pairs" id="res-pairs"></div>
+      </div>
+      <div class="card" id="analysis-card">
+        <h3>What Opus learned from this round</h3>
+        <div id="analysis-body"></div>
+      </div>
+      <div class="center" style="margin-top:18px">
+        <button id="btn-next" class="big">Start the next round →</button>
+        <div class="small muted" id="next-note" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div id="live-overview" class="hidden">
+      <div id="overview-wait" class="card center"><span class="spinner"></span> Claude Opus is writing the overview of all four rounds…</div>
+      <div id="overview-host"></div>
+      <div class="center" style="margin-top:16px">
+        <button id="btn-zip-live" class="big">⬇ Download all activity data (ZIP)</button>
+        <button id="btn-finish" class="ghost">Finish activity</button>
+      </div>
+    </div>
+
+    <div id="live-finished" class="hidden">
+      <div class="card center">
+        <h2>Activity finished</h2>
+        <p class="muted">Everything is saved under Activities.</p>
+        <button id="btn-zip-done" class="big">⬇ Download all activity data (ZIP)</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Overview viewer for past activities -->
+<div id="ov-modal" class="modal hidden">
+  <div style="width:min(1100px,100%)">
+    <div id="ov-modal-host"></div>
+    <div class="center" style="margin-top:10px"><button id="ov-modal-close" class="ghost">Close</button></div>
+  </div>
+</div>
+
+<!-- Text viewer (class brief) -->
+<div id="text-modal" class="modal hidden">
+  <div class="modal-card" style="max-width:760px;max-height:85vh;overflow:auto">
+    <h2 id="text-title"></h2>
+    <pre id="text-body" style="white-space:pre-wrap;font:inherit;font-size:.9rem;color:var(--muted)"></pre>
+    <div class="modal-actions"><button id="text-close" class="ghost">Close</button></div>
+  </div>
+</div>
+
+<!-- Confirmation -->
+<div id="confirm" class="modal hidden">
+  <div class="modal-card">
+    <h2 id="confirm-title">Are you sure?</h2>
+    <p id="confirm-body" class="muted"></p>
+    <div class="modal-actions"><button id="confirm-no" class="ghost">Cancel</button><button id="confirm-yes" class="danger">Yes</button></div>
+  </div>
+</div>
+
+<footer class="credit">
+  <a href="https://www.allentronics.com.au" target="_blank" rel="noopener">
+    <span>Powered and created by</span>
+    <img src="/img/allentronics-logo.png" alt="Allentronics Education Services">
+  </a>
+</footer>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/overview.js"></script>
+<script src="/js/teacher.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# One-click Render set-up: Dashboard → New → Blueprint → pick this repository.
+# Render asks for the two secrets below while it creates the service.
+services:
+  - type: web
+    name: human-or-not
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ANTHROPIC_API_KEY
+        sync: false          # your Claude API key, from console.anthropic.com
+      - key: TEACHER_CODE
+        sync: false          # the code you type to open the teacher console
+      - key: DATABASE_URL
+        fromDatabase:
+          name: human-or-not-db
+          property: connectionString
+
+# Free Postgres keeps your contexts, classes and activities when the free web
+# service goes to sleep (its own disk is wiped every time). Render's free
+# databases expire after 30 days — back up from the console before then, or
+# upgrade the database to a paid plan to keep it for good.
+databases:
+  - name: human-or-not-db
+    plan: free
+    databaseName: human_or_not
+    user: human_or_not

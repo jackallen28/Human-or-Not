@@ -1,0 +1,86 @@
+/* The animated overview. Self-contained so it also works as a standalone file. */
+.ov-root {
+  --ov-bg: #14110d; --ov-panel: #1e1913; --ov-line: #3b3128; --ov-text: #f4eee6; --ov-muted: #b3a595; --ov-accent: #ee8a2a;
+  position: relative; background: radial-gradient(1000px 520px at 50% -10%, #2c2016 0%, var(--ov-bg) 65%);
+  color: var(--ov-text); border-radius: 16px; overflow: hidden; outline: none; border: 1px solid var(--ov-line);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.ov-root:fullscreen { border-radius: 0; border: 0; }
+body.ov-standalone { margin: 0; background: #14110d; }
+.ov-standalone .ov-root { border-radius: 0; border: 0; }
+.ov-stage { position: relative; height: 560px; }
+.ov-root:fullscreen .ov-stage, .ov-standalone .ov-stage { height: calc(100vh - 60px); }
+.ov-slide {
+  position: absolute; inset: 0; padding: 40px clamp(20px, 6vw, 80px) 40px; display: flex; flex-direction: column;
+  justify-content: center; opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease;
+  pointer-events: none; overflow-y: auto;
+}
+.ov-slide.on { opacity: 1; transform: none; pointer-events: auto; }
+.ov-title { align-items: center; text-align: center; }
+.ov-slide h1 { font-size: clamp(2rem, 5vw, 3.6rem); margin: 0 0 14px; line-height: 1.1; }
+.ov-slide h2 { font-size: clamp(1.35rem, 3vw, 2.1rem); margin: 0 0 22px; line-height: 1.2; }
+.ov-slide p { font-size: clamp(1rem, 1.8vw, 1.22rem); color: var(--ov-muted); max-width: 62ch; margin: 0 0 10px; }
+.ov-kicker { color: var(--ov-accent); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: .8rem; margin-bottom: 12px; }
+.ov-small, .ov-slide .ov-small { font-size: .85rem; color: var(--ov-muted); }
+
+.ov-rise { opacity: 0; transform: translateY(16px); }
+.ov-slide.on .ov-rise { animation: ov-rise .7s ease forwards; animation-delay: var(--d, 0ms); }
+.ov-d2 { --d: 500ms; } .ov-d3 { --d: 1000ms; } .ov-d4 { --d: 1600ms; }
+@keyframes ov-rise { to { opacity: 1; transform: none; } }
+
+.ov-plan { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.ov-plan-card, .ov-step, .ov-beat { background: var(--ov-panel); border: 1px solid var(--ov-line); border-radius: 14px; padding: 18px; }
+.ov-plan-card p, .ov-beat p { font-size: .98rem; margin: 10px 0 0; }
+.ov-plan-n { font-weight: 750; color: var(--ov-accent); }
+.ov-models { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.ov-model { font-size: .74rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--c); color: var(--c); }
+.ov-model.off { opacity: .3; text-decoration: line-through; }
+
+.ov-chart { display: flex; align-items: flex-end; justify-content: center; gap: clamp(10px, 4vw, 48px); height: 260px; padding: 0 10px; border-bottom: 1px solid var(--ov-line); }
+.ov-chart-sm { height: 180px; gap: 8px; padding: 0 4px; }
+.ov-bar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; max-width: 120px; }
+.ov-bar-fill { width: 100%; height: 0; background: var(--c); border-radius: 8px 8px 0 0; }
+.ov-slide.on .ov-bar-fill { animation: ov-grow 1.2s cubic-bezier(.2,.8,.2,1) forwards; animation-delay: var(--d); }
+@keyframes ov-grow { to { height: var(--h); } }
+.ov-bar-val { font-weight: 750; font-size: 1.1rem; margin-bottom: 6px; opacity: 0; }
+.ov-slide.on .ov-bar-val { animation: ov-rise .5s ease forwards; animation-delay: calc(var(--d, 0ms) + 900ms); }
+.ov-chart-sm .ov-bar-val { font-size: .8rem; }
+.ov-bar-label { position: absolute; bottom: -26px; font-size: .85rem; color: var(--ov-muted); white-space: nowrap; }
+.ov-chart-sm .ov-bar-label { font-size: .7rem; bottom: -22px; }
+.ov-slide .ov-bar-off .ov-bar-val { opacity: .5; animation: none; color: var(--ov-muted); }
+.ov-notes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 24px; margin-top: 44px; color: var(--ov-muted); }
+.ov-notes b { color: var(--ov-accent); margin-right: 8px; }
+.ov-groups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.ov-group-label { text-align: center; margin-top: 32px; font-weight: 650; }
+
+.ov-timeline, .ov-beats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.ov-step ul { margin: 10px 0 0; padding-left: 18px; color: var(--ov-muted); }
+.ov-step li { margin-bottom: 6px; }
+.ov-beat h3 { margin: 0; color: var(--ov-accent); }
+
+.ov-versus { display: flex; align-items: center; justify-content: center; gap: clamp(16px, 5vw, 60px); margin: 10px 0 20px; }
+.ov-big { text-align: center; color: var(--ov-muted); }
+.ov-big-n { font-size: clamp(3rem, 9vw, 6rem); font-weight: 800; color: var(--ov-text); font-variant-numeric: tabular-nums; line-height: 1; }
+.ov-vs { font-size: 2.4rem; color: var(--ov-accent); }
+
+.ov-quotes { display: grid; gap: 18px; }
+.ov-quotes blockquote { margin: 0; font-size: clamp(1.15rem, 2.5vw, 1.7rem); line-height: 1.35; border-left: 4px solid var(--ov-accent); padding-left: 18px; }
+.ov-quotes cite { display: block; font-size: .9rem; color: var(--ov-muted); font-style: normal; margin-top: 6px; }
+.ov-list { font-size: clamp(1.05rem, 2vw, 1.3rem); line-height: 1.45; padding-left: 1.4em; margin: 0; }
+.ov-list li { margin-bottom: 14px; }
+
+.ov-credit { display: flex; align-items: center; gap: 10px; margin-top: 30px; color: var(--ov-muted); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
+.ov-credit img { height: 26px; }
+
+.ov-controls { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-top: 1px solid var(--ov-line); }
+.ov-btn { background: transparent; color: var(--ov-text); border: 1px solid var(--ov-line); border-radius: 8px; width: 38px; height: 34px; cursor: pointer; font-size: 1rem; padding: 0; }
+.ov-btn:hover { border-color: var(--ov-accent); }
+.ov-dots { display: flex; gap: 6px; }
+.ov-dots span { width: 9px; height: 9px; border-radius: 50%; background: var(--ov-line); cursor: pointer; }
+.ov-dots span.on { background: var(--ov-accent); }
+
+@media (max-width: 760px) {
+  .ov-plan, .ov-groups { grid-template-columns: 1fr 1fr; }
+  .ov-notes { grid-template-columns: 1fr; }
+  .ov-stage { height: 640px; }
+}

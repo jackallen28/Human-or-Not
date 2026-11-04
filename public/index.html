@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Human or Not?</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤔</text></svg>">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<section id="screen-code" class="wrap">
+  <div class="card narrow" style="margin-top:6vh">
+    <h1>Human or Not?</h1>
+    <p class="muted">Enter the code on your card.</p>
+    <div class="field">
+      <input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8"
+             placeholder="ABCD1234" style="font-size:1.6rem;letter-spacing:.25em;text-align:center;text-transform:uppercase">
+    </div>
+    <button id="join-btn" class="big" style="width:100%">Join</button>
+    <div id="code-error" class="error"></div>
+    <div class="notice" style="margin-top:18px">
+      You'll chat with someone for a few minutes — it might be a <strong>classmate</strong>, or it might be
+      <strong>generative AI</strong> pretending to be one. Either way, <strong>don't share personal information</strong>
+      like your full name, address, phone number or socials. Be respectful, as you would in class.
+      At the end you'll guess: human or AI?
+    </div>
+  </div>
+</section>
+
+<section id="screen-wait" class="wrap hidden">
+  <div class="card narrow center" style="margin-top:10vh">
+    <div class="pill" id="wait-pill">Waiting</div>
+    <h1 style="margin-top:12px" id="wait-title">You're in</h1>
+    <p class="muted" id="wait-body">Waiting for your teacher to start.</p>
+    <div class="typing" style="margin:18px auto;width:fit-content"><span></span><span></span><span></span></div>
+    <p class="small muted" id="wait-who"></p>
+  </div>
+</section>
+
+<section id="screen-chat" class="chat-shell hidden">
+  <div class="chat-head">
+    <div>
+      <div style="font-weight:650">Your partner</div>
+      <div class="tiny muted" id="chat-round"></div>
+    </div>
+    <div id="chat-clock" style="font-size:1.5rem;font-weight:750;font-variant-numeric:tabular-nums">3:00</div>
+  </div>
+  <div class="log" id="log"><div class="typing hidden" id="typing"><span></span><span></span><span></span></div></div>
+  <form class="composer" id="composer" autocomplete="off">
+    <input id="msg" maxlength="400" placeholder="Say something…" autocomplete="off">
+    <button type="submit">Send</button>
+  </form>
+</section>
+
+<section id="screen-guess" class="wrap hidden">
+  <div class="card narrow center" style="margin-top:8vh">
+    <h1>Time's up</h1>
+    <p class="muted">Who were you talking to?</p>
+    <div class="row" style="margin-top:22px">
+      <button id="guess-human" class="big" style="background:var(--human)">🧑 A classmate</button>
+      <button id="guess-ai" class="big" style="background:var(--ai);color:#0c1230">🤖 An AI</button>
+    </div>
+    <div id="guess-error" class="error"></div>
+  </div>
+</section>
+
+<section id="screen-result" class="wrap hidden">
+  <div class="card narrow center" style="margin-top:8vh">
+    <div id="result-icon" style="font-size:3.4rem;line-height:1">🎉</div>
+    <h1 id="result-title" style="margin-top:10px"></h1>
+    <p class="muted" id="result-body"></p>
+    <p class="small muted">Look up at the screen — the next round starts soon.</p>
+  </div>
+</section>
+
+<footer class="credit">
+  <a href="https://www.allentronics.com.au" target="_blank" rel="noopener">
+    <span>Powered and created by</span>
+    <img src="/img/allentronics-logo.png" alt="Allentronics Education Services">
+  </a>
+</footer>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/student.js"></script>
+</body>
+</html>

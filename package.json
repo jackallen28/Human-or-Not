@@ -1,0 +1,28 @@
+{
+  "name": "human-or-not",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A classroom Turing test for any educator: students chat with a classmate or an AI, guess which, and watch the AI learn their class across four rounds.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node test/unit.mjs && node test/run.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "pg": "^8.13.1",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.5",
+    "playwright": "^1.56.0",
+    "socket.io-client": "^4.8.3"
+  }
+}
