@@ -158,13 +158,25 @@ You need two things: a [Render](https://render.com) account (free) and a
 2. **Put this project on Render.** Fork this repository to your own GitHub account, then in
    Render choose **New → Blueprint** and pick your fork. Render reads `render.yaml` and sets
    up the website and a free database for you.
-3. **Fill in the two secrets Render asks for:**
+3. **Fill in the secrets Render asks for:**
    - `ANTHROPIC_API_KEY` — the key from step 1.
-   - `TEACHER_CODE` — any code you like. You type it to open the teacher console; students
-     never need it.
+   - `TEACHER_1_CODE`, `TEACHER_2_CODE`, `TEACHER_3_CODE` — one password per teacher.
+     Students never need them. Leave one blank to switch that console off.
 4. **Wait for the first deploy** (3–5 minutes). Render gives you an address like
    `https://human-or-not-xxxx.onrender.com`. Students go to that address;
-   you go to that address followed by **`/teacher`**.
+   teachers go to that address followed by **`/teacher`** and pick their console
+   (or bookmark **`/teacher/1`**, **`/teacher/2`**, **`/teacher/3`**).
+
+### Three teachers, one deployment
+
+Each teacher has their own console, password, contexts, classes and activities — none of
+them can see the others'. All three can run an activity **at the same time**: students
+just type the code on their card, and it takes them to their own teacher's activity.
+Backups are per teacher too. To show names instead of *Teacher 1*, set
+`TEACHER_1_NAME` (and 2, 3) in Render. An older deployment's `TEACHER_CODE` still works
+as Teacher 1's password.
+
+<p align="center"><img src="docs/screenshots/teacher-picker.png" alt="Choosing a teacher console" width="55%"></p>
 
 That is the whole set-up. Updates you push to your fork deploy automatically.
 
@@ -302,8 +314,9 @@ details, and if a student raises distress or asks sincerely to stop, it drops th
 tells them to speak to their teacher. Anthropic's API is not used to train models on your
 data by default.
 
-**One activity at a time.** The server runs one live activity at a time. Run another class
-afterwards, or deploy a second copy.
+**One activity per teacher at a time.** Each teacher runs one live activity at a time; the
+three teachers can run theirs simultaneously. Three busy classes at once is fine on the
+free plan, but each one uses its own API credit.
 
 ---
 
@@ -311,8 +324,8 @@ afterwards, or deploy a second copy.
 
 ```bash
 npm install
-cp .env.example .env     # add your ANTHROPIC_API_KEY and TEACHER_CODE
-npm start                # http://localhost:3000 and http://localhost:3000/teacher
+cp .env.example .env     # add your ANTHROPIC_API_KEY and teacher passwords
+npm start                # http://localhost:3000 and http://localhost:3000/teacher/1
 ```
 
 Students on the same Wi-Fi join at your computer's local address (e.g.

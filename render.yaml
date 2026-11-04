@@ -1,5 +1,5 @@
 # One-click Render set-up: Dashboard → New → Blueprint → pick this repository.
-# Render asks for the two secrets below while it creates the service.
+# Render asks for the secrets below while it creates the service.
 services:
   - type: web
     name: human-or-not
@@ -13,8 +13,12 @@ services:
         value: "22"
       - key: ANTHROPIC_API_KEY
         sync: false          # your Claude API key, from console.anthropic.com
-      - key: TEACHER_CODE
-        sync: false          # the code you type to open the teacher console
+      - key: TEACHER_1_CODE
+        sync: false          # Teacher 1's password (console at /teacher/1)
+      - key: TEACHER_2_CODE
+        sync: false          # Teacher 2's password (console at /teacher/2)
+      - key: TEACHER_3_CODE
+        sync: false          # Teacher 3's password (console at /teacher/3)
       - key: DATABASE_URL
         fromDatabase:
           name: human-or-not-db

@@ -4,7 +4,10 @@
   const pct = (v) => (v === null || v === undefined ? '—' : `${v}%`);
   const socket = io({ autoConnect: false });
 
-  let code = sessionStorage.getItem('hon-teacher') || '';
+  // Which teacher's console this is: /teacher/2 → "2".
+  const teacherId = (/^\/teacher\/(\d+)/.exec(location.pathname) || [null, '1'])[1];
+  const storageKey = `hon-teacher-${teacherId}`;
+  let code = sessionStorage.getItem(storageKey) || '';
   let meta = null;
   let contexts = [];
   let classes = [];
@@ -20,10 +23,10 @@
   async function api(path, options = {}) {
     const res = await fetch(`/api${path}`, {
       ...options,
-      headers: { 'content-type': 'application/json', 'x-teacher-code': code, ...(options.headers || {}) },
+      headers: { 'content-type': 'application/json', 'x-teacher-id': teacherId, 'x-teacher-code': code, ...(options.headers || {}) },
       body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body,
     });
-    if (res.status === 401) { signOut('That teacher code was not accepted.'); throw new Error('unauthorised'); }
+    if (res.status === 401) { signOut('That password was not accepted.'); throw new Error('unauthorised'); }
     const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
     if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
     return data;
@@ -31,7 +34,7 @@
 
   /** Download something that needs the teacher code, which a plain link cannot send. */
   async function download(path, fallbackName) {
-    const res = await fetch(`/api${path}`, { headers: { 'x-teacher-code': code } });
+    const res = await fetch(`/api${path}`, { headers: { 'x-teacher-id': teacherId, 'x-teacher-code': code } });
     if (!res.ok) { flash((await res.json().catch(() => ({}))).error || 'Download failed.'); return; }
     const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')?.[1] || fallbackName;
     const url = URL.createObjectURL(await res.blob());
@@ -67,7 +70,9 @@
       if (err.message !== 'unauthorised') $('auth-error').textContent = err.message;
       return;
     }
-    sessionStorage.setItem('hon-teacher', code);
+    sessionStorage.setItem(storageKey, code);
+    $('teacher-name').textContent = meta.teacher.name;
+    document.title = `${meta.teacher.name} — Human or Not?`;
     $('screen-auth').classList.add('hidden');
     $('screen-app').classList.remove('hidden');
     socket.connect();
@@ -77,7 +82,9 @@
   }
 
   function signOut(message) {
-    sessionStorage.removeItem('hon-teacher');
+    sessionStorage.removeItem(storageKey);
+    code = '';
+    socket.disconnect();
     $('screen-app').classList.add('hidden');
     $('screen-auth').classList.remove('hidden');
     $('auth-error').textContent = message || '';
@@ -85,7 +92,18 @@
 
   $('auth-btn').addEventListener('click', signIn);
   $('auth-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
-  socket.on('connect', () => socket.emit('teacher:auth', { code }, () => {}));
+  socket.on('connect', () => socket.emit('teacher:auth', { teacher: teacherId, code }, () => {}));
+  $('sign-out').addEventListener('click', (e) => { e.preventDefault(); $('auth-code').value = ''; signOut(''); });
+  fetch('/teachers.json').then((r) => r.json()).then((list) => {
+    const me = list.find((t) => t.id === teacherId);
+    if (!me) return;
+    $('auth-title').textContent = me.name;
+    document.title = `${me.name} — Human or Not?`;
+    if (!me.ready) {
+      $('auth-help').innerHTML = `This console is switched off: no password is set. Add <code>TEACHER_${teacherId}_CODE</code> in Render → your service → Environment.`;
+      $('auth-btn').disabled = true;
+    } else $('auth-help').textContent = 'Enter your password.';
+  }).catch(() => {});
   if (code) signIn();
 
   // Keep a free Render instance awake while the console is open.

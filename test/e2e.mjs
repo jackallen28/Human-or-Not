@@ -242,6 +242,63 @@ await cmd('live:finish', {});
 const openRow = (await api('/activities')).data[0];
 check('open: listed with its mode and rounds', openRow.mode === 'Open play' && openRow.rounds === 4 && openRow.planned === 4 && openRow.hasOverview);
 
+console.log('\n--- 10. several teachers ---');
+const teachersList = await (await fetch(`${URL}/teachers.json`)).json();
+check('three teacher consoles are listed', teachersList.map((t) => t.name).join('|') === 'Teacher 1|Ms Second|Teacher 3');
+check('a teacher with no password is switched off', teachersList[2].ready === false && teachersList[0].ready && teachersList[1].ready);
+check('the list never shows passwords', !JSON.stringify(teachersList).includes('code'));
+check('each console has its own page', (await fetch(`${URL}/teacher/2`)).status === 200 && (await fetch(`${URL}/teacher/9`)).status === 404);
+const api2 = (p, opts = {}) => api(p, { ...opts, headers: { 'x-teacher-id': '2', 'x-teacher-code': 'second-code', ...(opts.headers || {}) } });
+check('teacher 2 cannot sign in with teacher 1\'s password', (await api('/meta', { headers: { 'x-teacher-id': '2' } })).status === 401);
+check('teacher 3 cannot sign in at all', (await api('/meta', { headers: { 'x-teacher-id': '3', 'x-teacher-code': '' } })).status === 401);
+const meta2 = (await api2('/meta')).data;
+check('teacher 2 signs in with their own password', meta2.teacher?.name === 'Ms Second' && meta2.live === null);
+check('teacher 2 starts with an empty workspace', (await api2('/contexts')).data.length === 0 && (await api2('/classes')).data.length === 0 && (await api2('/activities')).data.length === 0);
+check('teacher 2 cannot open teacher 1\'s class', (await api2(`/classes/${cls.id}`)).status === 404);
+check('teacher 2 cannot download teacher 1\'s activity', (await api2(`/activities/${act.id}/zip`)).status === 404);
+check('teacher 2 cannot delete teacher 1\'s context', (await api2(`/contexts/${ctxId}`, { method: 'DELETE' })).status === 404 && (await api(`/contexts/${ctxId}`)).status === 200);
+const cls2 = (await api2('/classes', { method: 'POST', body: { name: 'Ms Second 9A', count: 3, personaSet: 'secondary', contextId: ctxId } })).data;
+check('teacher 2 makes a class, but cannot borrow teacher 1\'s context', cls2.size === 3 && cls2.contextId === null);
+check('teacher 1 does not see it', !(await api('/classes')).data.some((c) => c.id === cls2.id));
+const full2 = (await api2(`/classes/${cls2.id}`)).data;
+check('login codes are unique across teachers', !full2.students.some((s) => full.students.some((t) => t.code === s.code)));
+
+// Both teachers run an activity at the same time.
+await api('/activities', { method: 'POST', body: { classId: cls.id, name: 'T1 live', durationSec: 60, mode: 'open', blockSize: 1 } });
+const act2 = await api2('/activities', { method: 'POST', body: { classId: cls2.id, name: 'T2 live', durationSec: 60, mode: 'open', blockSize: 1 } });
+check('teacher 2 can start while teacher 1 is running', act2.status === 200, act2.data.error || '');
+await rejoin();
+const teacher2 = io(URL);
+await new Promise((r) => teacher2.on('connect', r));
+let view2 = null;
+teacher2.on('live', (v) => { view2 = v; });
+check('teacher 2\'s socket refuses teacher 1\'s password', !(await emit(teacher2, 'teacher:auth', { teacher: '2', code: CODE })).ok);
+check('teacher 2\'s socket signs in', (await emit(teacher2, 'teacher:auth', { teacher: '2', code: 'second-code' })).ok);
+const kids2 = [];
+for (const s2 of full2.students) {
+  const sock = io(URL);
+  await new Promise((r) => sock.on('connect', r));
+  const k = { sock, n: s2.n, state: null };
+  sock.on('state', (st) => { k.state = st; });
+  const res = await emit(sock, 'student:join', { code: s2.code });
+  check(`teacher 2's Student ${s2.n} lands in teacher 2's activity`, res.ok && res.activity === 'T2 live');
+  kids2.push(k);
+}
+await sleep(300);
+check('each console sees only its own students', view2?.name === 'T2 live' && view2.students.length === 3 && view.name === 'T1 live' && view.students.length === 5);
+check('teacher 2 starts a round', (await emit(teacher2, 'live:startRound', {})).ok);
+await sleep(300);
+check('teacher 2\'s students are chatting', kids2.every((k) => k.state?.phase === 'active'));
+check('teacher 1\'s students are still waiting', kids.every((k) => k.state?.phase === 'lobby'));
+check('teacher 1\'s round controls do not touch teacher 2', (await cmd('live:startRound')).ok && view2.roundNumber === 1 && view.roundNumber === 1);
+check('teacher 2 ends their own round only', (await emit(teacher2, 'live:endRound', {})).ok && (await sleep(200), kids2.every((k) => k.state?.phase === 'guess') && kids.every((k) => k.state?.phase === 'active')));
+const backup2 = (await api2('/backup')).data;
+check('a backup holds only that teacher\'s things', backup2.classes.length === 1 && backup2.classes[0].id === cls2.id && backup2.activities.length === 1);
+await emit(teacher2, 'live:finish', {});
+await cmd('live:finish');
+teacher2.close();
+for (const k of kids2) k.sock.close();
+
 teacher.close();
 for (const k of kids) k.sock.close();
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teachers — Human or Not?</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎛️</text></svg>">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<section class="wrap">
+  <div class="card narrow" style="margin-top:12vh">
+    <h1>Teacher consoles</h1>
+    <p class="muted small">Each teacher has their own console, password, classes and activities. Choose yours.</p>
+    <div class="stack" id="teachers"><p class="muted small">Loading…</p></div>
+    <p class="tiny muted" style="margin-top:16px">Students don't need this page: they go to the main address and enter the code on their card.</p>
+  </div>
+</section>
+<footer class="credit">
+  <span>Powered and created by</span>
+  <a href="https://www.allentronics.com.au" target="_blank" rel="noopener"><img src="/img/allentronics-logo.png" alt="Allentronics Education Services"></a>
+</footer>
+<script>
+  const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  fetch('/teachers.json').then((r) => r.json()).then((list) => {
+    document.getElementById('teachers').innerHTML = list.map((t) => t.ready
+      ? `<a class="btn big" style="display:block;text-align:center" href="/teacher/${t.id}">${esc(t.name)} →</a>`
+      : `<div class="btn big ghost" style="display:block;text-align:center;opacity:.45;cursor:default" title="No password set">${esc(t.name)} · not set up</div>`).join('');
+  });
+</script>
+</body>
+</html>

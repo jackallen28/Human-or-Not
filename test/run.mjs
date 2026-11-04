@@ -13,7 +13,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hon-e2e-'));
 const server = spawn('node', [path.join(here, '..', 'server', 'index.js')], {
   env: {
     ...process.env,
-    PORT: '3500', TEACHER_CODE: 'test-code', DATA_DIR: dataDir, DATABASE_URL: '',
+    PORT: '3500', TEACHER_CODE: 'test-code', TEACHER_2_CODE: 'second-code', TEACHER_2_NAME: 'Ms Second', TEACHER_3_CODE: '', DATA_DIR: dataDir, DATABASE_URL: '',
     ANTHROPIC_API_KEY: 'sk-ant-test', ANTHROPIC_BASE_URL: 'http://localhost:3501',
     BOT_THINK_MS: '100', BOT_REPLY_CAP_MS: '300', BOT_WPM_MIN: '500', BOT_WPM_MAX: '600', BOT_HOLD_BACK: '0',
   },

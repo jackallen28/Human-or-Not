@@ -25,7 +25,7 @@ const mock = await startDemo(3601);
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hon-shots-'));
 const server = spawn('node', [path.join(here, '..', 'server', 'index.js')], {
   env: {
-    ...process.env, PORT: '3600', TEACHER_CODE: CODE, DATA_DIR: dataDir, DATABASE_URL: '',
+    ...process.env, PORT: '3600', TEACHER_1_CODE: CODE, TEACHER_2_CODE: 'demo-2', TEACHER_3_CODE: 'demo-3', DATA_DIR: dataDir, DATABASE_URL: '',
     PUBLIC_URL: 'https://human-or-not.onrender.com',
     ANTHROPIC_API_KEY: 'sk-ant-demo', ANTHROPIC_BASE_URL: 'http://localhost:3601',
     BOT_THINK_MS: '200', BOT_REPLY_CAP_MS: '500', BOT_WPM_MIN: '400', BOT_WPM_MAX: '500', BOT_HOLD_BACK: '1',
@@ -40,6 +40,10 @@ const shot = (page, name, opts = {}) => page.screenshot({ path: path.join(OUT, `
 
 // ---------------------------------------------------------------- console
 await t.goto(`${URL}/teacher`, { waitUntil: 'networkidle' });
+await sleep(300);
+await shot(t, 'teacher-picker');
+await t.click('a[href="/teacher/1"]');
+await t.waitForSelector('#auth-code');
 await t.fill('#auth-code', CODE);
 await t.click('#auth-btn');
 await t.waitForSelector('#screen-app:not(.hidden)');
