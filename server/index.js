@@ -15,7 +15,7 @@ import { LiveActivity, PHASES, MAX_ACTIVITY_STUDENTS, MAX_CLASS_STUDENTS } from 
 import { MODES, MAX_ROUNDS, buildPlan, clampBlock, ensurePlan, modeInfo } from './modes.js';
 import { activityZip, classZip, overviewData, saveName } from './report.js';
 import { createZip } from './zip.js';
-import { TEACHERS, findTeacher, ownerOf, publicTeachers, teacherWarnings } from './teachers.js';
+import { ADMIN_ID, TEACHERS, findTeacher, isAdmin, ownerOf, publicTeachers, teacherWarnings } from './teachers.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(here, '..', 'public');
@@ -100,12 +100,27 @@ app.get('/templates-all.zip', (_req, res) => {
   res.send(zip);
 });
 
-/** Every /api route below needs a teacher's slot and password, and sees only that teacher's things. */
+/**
+ * Every /api route below needs a teacher's slot and password. Teacher 1 is the
+ * admin: only they change the setup (contexts, classes, backups), and what
+ * they set up is available to every teacher. Each teacher runs and sees their
+ * own activities; the admin sees everyone's.
+ */
 function teacherOnly(req, res, next) {
   const teacher = findTeacher(req.get('x-teacher-id') || '1', req.get('x-teacher-code'));
   if (!teacher) return res.status(401).json({ error: 'Wrong password for this teacher.' });
-  req.teacher = teacher;
+  req.teacher = { ...teacher, admin: isAdmin(teacher) };
   next();
+}
+function adminOnly(req, res, next) {
+  if (req.teacher?.admin) return next();
+  res.status(403).json({ error: `Only ${TEACHERS.find((t) => t.id === ADMIN_ID)?.name || 'Teacher 1'} (the admin) can change the setup.` });
+}
+/** Activities: your own, or everyone's for the admin. */
+const canSeeActivity = (req, a) => Boolean(a) && (req.teacher.admin || ownerOf(a) === req.teacher.id);
+async function visibleActivity(req, id) {
+  const record = await store.get('activities', id);
+  return canSeeActivity(req, record) ? record : null;
 }
 
 /** A stored record, only if it belongs to the signed-in teacher. */
@@ -113,7 +128,6 @@ async function owned(req, collection, id) {
   const record = await store.get(collection, id);
   return record && ownerOf(record) === req.teacher.id ? record : null;
 }
-const mineOnly = (req, list) => list.filter((r) => ownerOf(r) === req.teacher.id);
 const api = express.Router();
 api.use(teacherOnly);
 app.use('/api', api);
@@ -149,7 +163,7 @@ api.get('/meta', wrap(async (req, res) => {
     maxRounds: MAX_ROUNDS,
     storage: { kind: store.kind, description: store.describe(), persistent: !onFreeRenderDisk },
     joinUrl: joinUrl(req).replace(/^https?:\/\//, ''),
-    teacher: { id: req.teacher.id, name: req.teacher.name },
+    teacher: { id: req.teacher.id, name: req.teacher.name, admin: req.teacher.admin },
     teachers: publicTeachers(),
     live: (() => { const live = liveFor(req.teacher.id); return live ? { id: live.record.id, name: live.record.name, phase: live.phase } : null; })(),
   });
@@ -158,7 +172,7 @@ api.get('/meta', wrap(async (req, res) => {
 // ----------------------------------------------------------------- contexts
 
 /** Can this teacher use a context: their own, or one shared with them. */
-const canUse = (req, c) => Boolean(c) && (ownerOf(c) === req.teacher.id || (c.sharedWith || []).includes(req.teacher.id));
+const canUse = (req, c) => Boolean(c) && (ownerOf(c) === req.teacher.id || ownerOf(c) === ADMIN_ID || (c.sharedWith || []).includes(req.teacher.id));
 async function usable(req, id) {
   const context = id ? await store.get('contexts', id) : null;
   return canUse(req, context) ? context : null;
@@ -239,7 +253,7 @@ api.get('/contexts/:id', wrap(async (req, res) => {
   res.json({ ...context, mine: ownerOf(context) === req.teacher.id, owner: { id: ownerOf(context), name: teacherName(ownerOf(context)) } });
 }));
 
-api.post('/contexts', wrap(async (req, res) => {
+api.post('/contexts', adminOnly, wrap(async (req, res) => {
   const files = {
     about: String(req.body?.files?.about || ''),
     learned: String(req.body?.files?.learned || ''),
@@ -261,7 +275,7 @@ api.post('/contexts', wrap(async (req, res) => {
   res.json(contextSummary(req)(context));
 }));
 
-api.put('/contexts/:id', wrap(async (req, res) => {
+api.put('/contexts/:id', adminOnly, wrap(async (req, res) => {
   const context = await owned(req, 'contexts', req.params.id);
   if (!context) return res.status(404).json({ error: 'Only the teacher who made this context can change it.' });
   for (const key of ['about', 'learned', 'voice']) {
@@ -275,7 +289,7 @@ api.put('/contexts/:id', wrap(async (req, res) => {
 
 // A written update on top of the files: "Today we covered…". Dated, kept in
 // order, and given priority over the files where they disagree.
-api.post('/contexts/:id/updates', wrap(async (req, res) => {
+api.post('/contexts/:id/updates', adminOnly, wrap(async (req, res) => {
   const context = await owned(req, 'contexts', req.params.id);
   if (!context) return res.status(404).json({ error: 'Only the teacher who made this context can update it.' });
   const text = String(req.body?.text || '').trim().slice(0, MAX_UPDATE);
@@ -285,7 +299,7 @@ api.post('/contexts/:id/updates', wrap(async (req, res) => {
   res.json(contextSummary(req)(context));
 }));
 
-api.delete('/contexts/:id/updates/:updateId', wrap(async (req, res) => {
+api.delete('/contexts/:id/updates/:updateId', adminOnly, wrap(async (req, res) => {
   const context = await owned(req, 'contexts', req.params.id);
   if (!context) return res.status(404).json({ error: 'Only the teacher who made this context can change it.' });
   const before = (context.updates || []).length;
@@ -297,7 +311,7 @@ api.delete('/contexts/:id/updates/:updateId', wrap(async (req, res) => {
 
 // Share with other teachers: they can use it for their classes, read it and
 // copy it, but only the owner can change it.
-api.put('/contexts/:id/share', wrap(async (req, res) => {
+api.put('/contexts/:id/share', adminOnly, wrap(async (req, res) => {
   const context = await owned(req, 'contexts', req.params.id);
   if (!context) return res.status(404).json({ error: 'Only the teacher who made this context can share it.' });
   const valid = new Set(TEACHERS.map((t) => t.id).filter((id) => id !== req.teacher.id));
@@ -308,7 +322,7 @@ api.put('/contexts/:id/share', wrap(async (req, res) => {
 }));
 
 // Make your own editable copy of a context (your own or one shared with you).
-api.post('/contexts/:id/copy', wrap(async (req, res) => {
+api.post('/contexts/:id/copy', adminOnly, wrap(async (req, res) => {
   const source = await usable(req, req.params.id);
   if (!source) return res.status(404).json({ error: 'Not found.' });
   const copy = {
@@ -329,7 +343,7 @@ api.post('/contexts/:id/copy', wrap(async (req, res) => {
   res.json(contextSummary(req)(copy));
 }));
 
-api.delete('/contexts/:id', wrap(async (req, res) => {
+api.delete('/contexts/:id', adminOnly, wrap(async (req, res) => {
   if (!await owned(req, 'contexts', req.params.id)) return res.status(404).json({ error: 'Only the teacher who made this context can delete it.' });
   await store.remove('contexts', req.params.id);
   res.json({ ok: true });
@@ -378,7 +392,7 @@ api.get('/classes/:id', wrap(async (req, res) => {
   res.json(cls);
 }));
 
-api.post('/classes', wrap(async (req, res) => {
+api.post('/classes', adminOnly, wrap(async (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 80);
   const count = Math.floor(Number(req.body?.count));
   if (!name) return res.status(400).json({ error: 'Give the class a name.' });
@@ -399,7 +413,7 @@ api.post('/classes', wrap(async (req, res) => {
   res.json(classSummary(req)(cls));
 }));
 
-api.put('/classes/:id', wrap(async (req, res) => {
+api.put('/classes/:id', adminOnly, wrap(async (req, res) => {
   const cls = await owned(req, 'classes', req.params.id);
   if (!cls) return res.status(404).json({ error: 'Only the teacher who made this class can change it.' });
   if (req.body?.name) cls.name = String(req.body.name).trim().slice(0, 80);
@@ -421,7 +435,7 @@ api.put('/classes/:id', wrap(async (req, res) => {
 
 // Share a class: other teachers can run activities with it (and print its
 // cards), each with up to 50 of its students at a time.
-api.put('/classes/:id/share', wrap(async (req, res) => {
+api.put('/classes/:id/share', adminOnly, wrap(async (req, res) => {
   const cls = await owned(req, 'classes', req.params.id);
   if (!cls) return res.status(404).json({ error: 'Only the teacher who made this class can share it.' });
   const valid = new Set(TEACHERS.map((t) => t.id).filter((id) => id !== req.teacher.id));
@@ -451,7 +465,7 @@ api.get('/classes/:id/activities.zip', wrap(async (req, res) => {
   res.send(buffer);
 }));
 
-api.delete('/classes/:id', wrap(async (req, res) => {
+api.delete('/classes/:id', adminOnly, wrap(async (req, res) => {
   if (!await owned(req, 'classes', req.params.id)) return res.status(404).json({ error: 'Only the teacher who made this class can delete it.' });
   if (classInUse(req.params.id)) return res.status(409).json({ error: 'That class is in an activity right now.' });
   await store.remove('classes', req.params.id);
@@ -471,14 +485,14 @@ api.get('/classes/:id/cards.pdf', wrap(async (req, res) => {
 // --------------------------------------------------------------- activities
 
 const activitySummary = (a) => ({
-  id: a.id, name: a.name, classId: a.classId, className: a.className, saveName: saveName(a), contextName: a.contextName, status: a.status,
+  id: a.id, name: a.name, teacherId: ownerOf(a), teacherName: a.teacherName || `Teacher ${ownerOf(a)}`, classId: a.classId, className: a.className, saveName: saveName(a), contextName: a.contextName, status: a.status,
   rounds: a.rounds.length, planned: ensurePlan(a).plan.length, mode: modeInfo(a.mode).short,
   hasOverview: Boolean(a.overview), createdAt: a.createdAt, finishedAt: a.finishedAt || null,
   fooled: a.rounds.map((r) => r.stats?.aiFooledRate ?? null),
 });
 
 api.get('/activities', wrap(async (req, res) => {
-  const all = mineOnly(req, await store.list('activities'));
+  const all = (await store.list('activities')).filter((a) => canSeeActivity(req, a));
   res.json(all.sort((a, b) => b.createdAt - a.createdAt).map(activitySummary));
 }));
 
@@ -523,7 +537,7 @@ api.post('/activities', wrap(async (req, res) => {
 }));
 
 api.get('/activities/:id/zip', wrap(async (req, res) => {
-  const record = await owned(req, 'activities', req.params.id);
+  const record = await visibleActivity(req, req.params.id);
   if (!record) return res.status(404).json({ error: 'Not found.' });
   const cls = await store.get('classes', record.classId);
   const context = (record.contextId && await store.get('contexts', record.contextId)) || (record.contextBrief ? { brief: record.contextBrief } : null);
@@ -534,15 +548,14 @@ api.get('/activities/:id/zip', wrap(async (req, res) => {
 }));
 
 api.get('/activities/:id/overview', wrap(async (req, res) => {
-  const record = await owned(req, 'activities', req.params.id);
+  const record = await visibleActivity(req, req.params.id);
   if (!record) return res.status(404).json({ error: 'Not found.' });
   res.json(overviewData(record));
 }));
 
 api.delete('/activities/:id', wrap(async (req, res) => {
-  if (!await owned(req, 'activities', req.params.id)) return res.status(404).json({ error: 'Not found.' });
-  const live = liveFor(req.teacher.id);
-  if (live?.record.id === req.params.id && live.phase !== PHASES.FINISHED) {
+  if (!await visibleActivity(req, req.params.id)) return res.status(404).json({ error: 'Not found.' });
+  if ([...lives.values()].some((l) => l.record.id === req.params.id && l.phase !== PHASES.FINISHED)) {
     return res.status(409).json({ error: 'That activity is running.' });
   }
   await store.remove('activities', req.params.id);
@@ -551,22 +564,22 @@ api.delete('/activities/:id', wrap(async (req, res) => {
 
 // ------------------------------------------------------------------- backup
 
-api.get('/backup', wrap(async (req, res) => {
+api.get('/backup', adminOnly, wrap(async (req, res) => {
   const backup = {
     format: 'human-or-not-workspace',
     version: 1,
-    teacher: req.teacher.name,
     savedAt: new Date().toISOString(),
-    contexts: mineOnly(req, await store.list('contexts')),
-    classes: mineOnly(req, await store.list('classes')),
-    activities: mineOnly(req, await store.list('activities')),
+    // Everything on the server: the setup and every teacher's activities.
+    contexts: await store.list('contexts'),
+    classes: await store.list('classes'),
+    activities: await store.list('activities'),
   };
   res.setHeader('content-type', 'application/json');
-  res.setHeader('content-disposition', `attachment; filename="human-or-not-backup-teacher-${req.teacher.id}-${backup.savedAt.slice(0, 10)}.json"`);
+  res.setHeader('content-disposition', `attachment; filename="human-or-not-backup-${backup.savedAt.slice(0, 10)}.json"`);
   res.send(JSON.stringify(backup));
 }));
 
-api.post('/restore', wrap(async (req, res) => {
+api.post('/restore', adminOnly, wrap(async (req, res) => {
   const backup = req.body;
   if (backup?.format !== 'human-or-not-workspace') return res.status(400).json({ error: 'That is not a Human or Not? backup file.' });
   const counts = {};
@@ -574,10 +587,8 @@ api.post('/restore', wrap(async (req, res) => {
     counts[collection] = 0;
     for (const record of Array.isArray(backup[collection]) ? backup[collection] : []) {
       if (!record?.id || !/^[A-Za-z0-9_-]{1,80}$/.test(record.id)) continue;
-      // Never overwrite another teacher's record; a restore lands in this teacher's workspace.
-      const existing = await store.get(collection, record.id);
-      if (existing && ownerOf(existing) !== req.teacher.id) continue;
-      record.teacherId = req.teacher.id;
+      // Records keep the teacher they belong to; older backups belong to the admin.
+      record.teacherId = ownerOf(record);
       if (collection === 'activities' && record.status === 'live') record.status = 'interrupted';
       await store.put(collection, record.id, record);
       counts[collection] += 1;

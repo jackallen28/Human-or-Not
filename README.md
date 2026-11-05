@@ -145,10 +145,10 @@ carries into your next class, so it starts smarter every time.
 - **The model switch is a lesson on its own.** Does the "best" model matter, or does context matter more?
 - **Three ways to play.** Learning over three rounds, a secret model switch in round 4, or open play for as long as the class wants.
 - **It's honest.** Students are told up front an AI might be involved. No personal details, ever. If anyone is distressed, the AI drops the act and points them to you.
-- **Built for teaching teams.** Up to three teachers on one site, each with their own console, sharing classes and contexts when they want to.
+- **Built for teaching teams.** One admin sets it up once; up to three teachers then run their own activities, even at the same time.
 - **It costs almost nothing.** Free hosting; a few US dollars of API credit for a class of 25.
 
-<p align="center"><img src="docs/screenshots/console-home.png" alt="The teacher console home page" width="90%"><br><sub>Each teacher's console walks them through it in four steps.</sub></p>
+<p align="center"><img src="docs/screenshots/console-home.png" alt="The teacher console home page" width="90%"><br><sub>The admin's ⚙ Setup walks them through it in four steps.</sub></p>
 
 ---
 
@@ -172,28 +172,33 @@ You need two things: a [Render](https://render.com) account (free) and a
    teachers go to that address followed by **`/teacher`** and pick their console
    (or bookmark **`/teacher/1`**, **`/teacher/2`**, **`/teacher/3`**).
 
-### Three teachers, one deployment
+### Three teachers, one deployment: Teacher 1 is the admin
 
-Each teacher has their own console, password, contexts, classes and activities. Nobody sees
-another teacher's things unless they are shared with them (below). All three can run an
-activity **at the same time**: students just type the code on their card, and it takes them
-to the right activity. Backups are per teacher too.
+**Teacher 1 does the setup; everyone runs activities.** Teacher 1 is the admin. Behind a small
+**⚙ Setup** button they train the AI (contexts and updates), make the classes and print the
+login cards, and back up the data. Everything they set up is available to every teacher
+straight away; there is nothing to share.
+
+**Teachers 2 and 3 go straight to "Start a new activity".** They pick one of Teacher 1's
+classes, name the activity and go. They cannot change the setup.
+
+**Everyone, Teacher 1 included, lands on "Start a new activity"** when they sign in. Teacher 1
+also sees the ⚙ Setup button (and lands on Setup only until the first class exists).
+
+**Running at the same time.** All three can run an activity at once, even with the same
+class: make one class of up to 100 students (say a whole course cohort), print the cards
+once, and each teacher runs up to 50 of them. A student whose code is in more than one
+running activity is asked *"Which teacher are you with?"*, and goes straight back to the same
+room if they reconnect.
+
+**Saving.** Every activity is saved under its class and named
+`teacher-N_date_time_class`. Each teacher sees and downloads their own activities; Teacher 1
+sees everyone's, and **⬇ All activities** on a class gives every teacher's activities for it
+in one ZIP. **Back up everything** (Setup → Overview) saves the whole site.
 
 To show names instead of *Teacher 1*, set `TEACHER_1_NAME` (and 2, 3) in Render. An older
 deployment's `TEACHER_CODE` still works as Teacher 1's password. If you leave a teacher's
 `TEACHER_N_CODE` empty, that console is switched off.
-
-**One big class, several teachers.** Make the class once (say all 100 students of a course),
-print the cards, and **Share** it with the other teachers. Each teacher then starts their own
-activity with it, up to 50 students each, at the same time. A student whose code is in more
-than one running activity is asked *"Which teacher are you with?"*, and goes straight back to
-the same room if they reconnect. Every activity is saved under the class: the class's owner
-can download all of them as one ZIP (**⬇ All activities**), and each other teacher gets their own.
-
-**Sharing a context.** A teacher can **Share** a context with any of the others, which suits
-teachers running parallel classes of the same course. The others can use it for their classes,
-read it, and **Make my own copy** to change. Only the owner can edit, update or delete it. What
-the other teachers' activities learn is added to the shared context too.
 
 **Your own web address.** In Render → your service → **Settings → Custom Domains**, add e.g.
 `human-or-not.yourschool.edu.au`, then add the **CNAME** record Render shows at your domain
@@ -207,7 +212,7 @@ That is the whole set-up. Updates you push to your fork deploy automatically.
 
 ## The detail
 
-Everything above, step by step.
+Everything above, step by step. Steps 1 and 2 are Teacher 1's, under **⚙ Setup**; steps 3 and 4 are for every teacher.
 
 ### 1 · Train the AI on your class
 

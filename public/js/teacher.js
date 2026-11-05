@@ -76,9 +76,14 @@
     $('screen-auth').classList.add('hidden');
     $('screen-app').classList.remove('hidden');
     socket.connect();
+    isAdmin = Boolean(meta.teacher.admin);
+    $('nav-setup').classList.toggle('hidden', !isAdmin);
     renderMeta();
     await refreshAll();
+    // Everyone lands on "Start a new activity". The admin goes to Setup first
+    // only while there is nothing set up yet.
     if (meta.live) showTab('live');
+    else showTab(isAdmin && !classes.length ? 'home' : 'activities');
   }
 
   function signOut(message) {
@@ -111,13 +116,20 @@
 
   // ------------------------------------------------------------------ nav
 
+  const SETUP_TABS = ['home', 'train', 'classes'];
+  let isAdmin = false;
+
   function showTab(name) {
+    if (SETUP_TABS.includes(name) && !isAdmin) name = 'activities';
     tab = name;
+    const inSetup = SETUP_TABS.includes(name);
     for (const el of document.querySelectorAll('[data-page]')) el.classList.toggle('hidden', el.dataset.page !== name);
-    for (const b of document.querySelectorAll('#nav button')) b.classList.toggle('on', b.dataset.tab === name);
+    for (const b of document.querySelectorAll('#nav button')) b.classList.toggle('on', inSetup ? b.id === 'nav-setup' : b.dataset.tab === name);
+    $('subnav').classList.toggle('hidden', !inSetup);
+    for (const b of document.querySelectorAll('#subnav button')) b.classList.toggle('on', b.dataset.tab === name);
     if (name !== 'live') refreshAll();
   }
-  for (const b of document.querySelectorAll('#nav button')) b.addEventListener('click', () => showTab(b.dataset.tab));
+  for (const b of document.querySelectorAll('#nav button, #subnav button')) b.addEventListener('click', () => showTab(b.dataset.tab));
   for (const s of document.querySelectorAll('.step')) s.addEventListener('click', () => showTab(s.dataset.step === 'live' ? 'activities' : s.dataset.step));
 
   async function refreshAll() {
@@ -133,9 +145,11 @@
   function renderMeta() {
     const banners = [];
     if (!meta.hasApiKey) {
-      banners.push('<div class="warnbox"><strong>No Claude API key.</strong> Add <code>ANTHROPIC_API_KEY</code> in Render → your service → Environment. Until then the AI sends filler lines and nothing is analysed.</div>');
+      banners.push(isAdmin
+        ? '<div class="warnbox"><strong>No Claude API key.</strong> Add <code>ANTHROPIC_API_KEY</code> in Render → your service → Environment. Until then the AI sends filler lines and nothing is analysed.</div>'
+        : '<div class="warnbox"><strong>The AI is not connected yet.</strong> Ask the admin (Teacher 1) to add the Claude API key. Until then the AI sends filler lines.</div>');
     }
-    if (!meta.storage.persistent) {
+    if (!meta.storage.persistent && isAdmin) {
       banners.push('<div class="warnbox"><strong>Your data is not being kept.</strong> This free Render service has no database, and its disk is wiped whenever it goes to sleep. Add the free Render Postgres database (see the README), or use <em>Back up everything</em> on the Home page after each session.</div>');
     }
     $('banners').innerHTML = banners.join('');
@@ -285,7 +299,6 @@
           ${c.mine ? `
           <button class="small" data-panel="${c.id}:update">✎ Add update</button>
           <button class="ghost small" data-retrain="${c.id}">Replace files</button>
-          <button class="ghost small" data-panel="${c.id}:share">Share</button>
           <button class="danger small" data-delctx="${c.id}">Delete</button>` : `
           <button class="ghost small" data-copy="${c.id}">Make my own copy</button>`}
         </div>
@@ -449,7 +462,7 @@
             <option value="">No context</option>${contexts.map((x) => `<option value="${x.id}" ${x.id === c.contextId ? 'selected' : ''}>${esc(x.title || x.name)}</option>`).join('')}
           </select>
           <button class="ghost small" data-add="${c.id}">+ Students</button>
-          <button class="ghost small" data-clsshare="${c.id}">Share</button>` : ''}
+` : ''}
           <button class="ghost small" data-clszip="${c.id}">⬇ ${c.mine ? 'All activities' : 'My activities'} (ZIP)</button>
           ${c.mine ? `<button class="danger small" data-delcls="${c.id}">Delete</button>` : ''}
         </div></div>`;
@@ -500,7 +513,7 @@
     const select = $('act-class');
     const current = select.value;
     select.innerHTML = classes.length
-      ? classes.map((c) => `<option value="${c.id}">${esc(c.name)} (${c.size})${c.mine ? '' : ` — shared by ${esc(c.owner.name)}`}</option>`).join('')
+      ? classes.map((c) => `<option value="${c.id}">${esc(c.name)} (${c.size} students)</option>`).join('')
       : '<option value="">Create a class first</option>';
     if (current) select.value = current;
   }
@@ -586,6 +599,15 @@
 
   function renderActivities() {
     const host = $('act-list');
+    // Nothing to start with yet: say who sets classes up.
+    const empty = !classes.length;
+    $('act-empty').classList.toggle('hidden', !empty);
+    $('act-empty').innerHTML = !empty ? '' : isAdmin
+      ? '<strong>No classes yet.</strong> Set one up first: <a href="#" id="go-setup">⚙ Setup → Classes</a>.'
+      : `<strong>No classes yet.</strong> ${esc(meta?.teachers?.find((t) => t.id === '1')?.name || 'Teacher 1')} (the admin) sets up the classes. Once they have, they appear here.`;
+    $('go-setup')?.addEventListener('click', (e) => { e.preventDefault(); showTab('classes'); });
+    $('act-start').disabled = empty;
+    $('act-past-title').textContent = isAdmin ? 'Past activities — every teacher' : 'Your past activities';
     // Saved per activity, grouped under the class it was run with.
     const groups = new Map();
     for (const a of activities) {
@@ -594,12 +616,12 @@
     }
     const item = (a) => `
       <div class="list-item">
-        <div style="flex:1 1 320px"><div class="title">${esc(a.name)} <span class="pill ${a.status === 'finished' ? 'human' : a.status === 'live' ? 'on' : 'warn'}">${esc(a.status)}</span></div>
+        <div style="flex:1 1 320px"><div class="title">${esc(a.name)}${isAdmin && a.teacherId !== meta.teacher.id ? ` <span class="pill ai">${esc(a.teacherName)}</span>` : ''} <span class="pill ${a.status === 'finished' ? 'human' : a.status === 'live' ? 'on' : 'warn'}">${esc(a.status)}</span></div>
           <div class="small muted">${new Date(a.createdAt).toLocaleString()} · ${esc(a.mode)} · ${a.rounds}/${a.planned} rounds
             ${a.fooled.length ? ` · AI passed as human: ${a.fooled.map((f, i) => `R${i + 1} ${pct(f)}`).join(', ')}` : ''}</div>
           <div class="tiny muted"><code>${esc(a.saveName)}</code></div></div>
         <div class="shrink row">
-          ${a.status === 'live' ? '<button class="small" data-golive="1">Open live view</button>' : ''}
+          ${a.status === 'live' && a.teacherId === meta.teacher.id ? '<button class="small" data-golive="1">Open live view</button>' : ''}
           ${a.hasOverview ? `<button class="ghost small" data-ov="${a.id}">▶ Overview</button>` : ''}
           ${a.rounds ? `<button class="small" data-zip="${a.id}">⬇ ZIP</button>` : ''}
           ${a.status !== 'live' ? `<button class="danger small" data-delact="${a.id}">Delete</button>` : ''}

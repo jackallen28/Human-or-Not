@@ -83,7 +83,7 @@ await (await dl).saveAs(pdfPath);
 execFileSync('pdftoppm', ['-r', '110', '-png', '-f', '1', '-l', '1', pdfPath, path.join(dataDir, 'cards')]);
 fs.copyFileSync(fs.readdirSync(dataDir).filter((f) => f.startsWith('cards') && f.endsWith('.png')).map((f) => path.join(dataDir, f))[0], path.join(OUT, 'login-cards.png'));
 
-await t.click('[data-tab="activities"]');
+await t.click('#nav [data-tab="activities"]');
 await t.fill('#act-name', 'Preservice teachers — week 6');
 await t.selectOption('#act-duration', '180');
 await sleep(200);

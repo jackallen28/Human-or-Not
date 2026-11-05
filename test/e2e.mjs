@@ -113,10 +113,14 @@ for (let round = 1; round <= 4; round++) {
   else check(`round ${round} uses all three models`, models.length === 3, models.join(','));
   check(`round ${round}: personas come from the ticked set`, aiKids.every((s) => ['The checked-out one', 'The class clown'].includes(s.persona)));
 
+  // Count only this round's messages: the lists carry over from earlier rounds.
+  const before = kids.map((k) => k.msgs.length);
   for (const k of kids) await emit(k.sock, 'chat:send', { text: `hey its student ${k.n}` });
   const aiNs = aiKids.map((s) => s.n);
+  const fromAiThisRound = (n) => kids[n - 1].msgs.slice(before[n - 1]).filter((m) => !m.mine).length;
   check(`round ${round}: the AI replies, as separate messages`,
-    await until(() => aiNs.every((n) => kids[n - 1].msgs.filter((m) => !m.mine).length >= 2), 8000));
+    await until(() => aiNs.every((n) => fromAiThisRound(n) >= 2), 8000));
+  check(`round ${round}: the replies came from the Claude API`, await until(async () => (await getCalls()).some((c) => c.system.includes('You are')), 4000));
   const calls = await getCalls();
   if (round === 2) {
     const chat = calls.find((c) => c.system.includes('WHAT YOU HAVE LEARNED'));
@@ -254,30 +258,33 @@ const api2 = (p, opts = {}) => api(p, { ...opts, headers: { 'x-teacher-id': '2',
 check('teacher 2 cannot sign in with teacher 1\'s password', (await api('/meta', { headers: { 'x-teacher-id': '2' } })).status === 401);
 check('teacher 3 cannot sign in at all', (await api('/meta', { headers: { 'x-teacher-id': '3', 'x-teacher-code': '' } })).status === 401);
 const meta2 = (await api2('/meta')).data;
-check('teacher 2 signs in with their own password', meta2.teacher?.name === 'Ms Second' && meta2.live === null);
-check('teacher 2 starts with an empty workspace', (await api2('/contexts')).data.length === 0 && (await api2('/classes')).data.length === 0 && (await api2('/activities')).data.length === 0);
-check('teacher 2 cannot open teacher 1\'s class', (await api2(`/classes/${cls.id}`)).status === 404);
-check('teacher 2 cannot download teacher 1\'s activity', (await api2(`/activities/${act.id}/zip`)).status === 404);
-check('teacher 2 cannot delete teacher 1\'s context', (await api2(`/contexts/${ctxId}`, { method: 'DELETE' })).status === 404 && (await api(`/contexts/${ctxId}`)).status === 200);
-const cls2 = (await api2('/classes', { method: 'POST', body: { name: 'Ms Second 9A', count: 3, personaSet: 'secondary', contextId: ctxId } })).data;
-check('teacher 2 makes a class, but cannot borrow teacher 1\'s context', cls2.size === 3 && cls2.contextId === null);
-check('teacher 1 does not see it', !(await api('/classes')).data.some((c) => c.id === cls2.id));
-const full2 = (await api2(`/classes/${cls2.id}`)).data;
-check('login codes are unique across teachers', !full2.students.some((s) => full.students.some((t) => t.code === s.code)));
+check('teacher 2 signs in with their own password, not as admin', meta2.teacher?.name === 'Ms Second' && meta2.teacher.admin === false && meta2.live === null);
+check('teacher 1 is the admin', (await api('/meta')).data.teacher.admin === true);
 
-// Sharing a context
-check('teacher 1 can share a context with teacher 2', (await api(`/contexts/${ctxId}/share`, { method: 'PUT', body: { teachers: ['2', '1', '9'] } })).data.sharedWith?.join() === '2');
-const shared = (await api2('/contexts')).data;
-check('teacher 2 now sees it, marked as shared by teacher 1', shared.length === 1 && shared[0].id === ctxId && !shared[0].mine && shared[0].owner.name === 'Teacher 1');
-check('teacher 2 can read it', (await api2(`/contexts/${ctxId}`)).data.brief?.includes('sea otter'));
-check('teacher 2 can use it for a class', (await api2(`/classes/${cls2.id}`, { method: 'PUT', body: { contextId: ctxId } })).data.contextId === ctxId);
-check('teacher 2 cannot change it', (await api2(`/contexts/${ctxId}/updates`, { method: 'POST', body: { text: 'sneaky change' } })).status === 404
-  && (await api2(`/contexts/${ctxId}`, { method: 'PUT', body: { name: 'x' } })).status === 404
-  && (await api2(`/contexts/${ctxId}/share`, { method: 'PUT', body: { teachers: ['3'] } })).status === 404
-  && (await api2(`/contexts/${ctxId}`, { method: 'DELETE' })).status === 404);
-const copy = (await api2(`/contexts/${ctxId}/copy`, { method: 'POST' })).data;
-check('teacher 2 can make their own copy', copy.mine && copy.id !== ctxId && /copy/.test(copy.name) && copy.status === 'ready');
-check('teacher 1 does not see teacher 2\'s copy', !(await api('/contexts')).data.some((c) => c.id === copy.id));
+// Teacher 1 sets up; everyone uses it.
+check('teacher 2 sees the admin\'s contexts and classes', (await api2('/contexts')).data.some((c) => c.id === ctxId) && (await api2('/classes')).data.some((c) => c.id === cls.id));
+check('teacher 2 can read a context and open a class', (await api2(`/contexts/${ctxId}`)).data.brief?.includes('sea otter') && (await api2(`/classes/${cls.id}`)).status === 200);
+check('teacher 2 starts with no activities of their own', (await api2('/activities')).data.length === 0);
+check('teacher 2 cannot download teacher 1\'s activity', (await api2(`/activities/${act.id}/zip`)).status === 404);
+const forbidden = await Promise.all([
+  api2('/contexts', { method: 'POST', body: { name: 'x', files: { about, learned } } }),
+  api2(`/contexts/${ctxId}`, { method: 'PUT', body: { name: 'x' } }),
+  api2(`/contexts/${ctxId}/updates`, { method: 'POST', body: { text: 'sneaky change' } }),
+  api2(`/contexts/${ctxId}`, { method: 'DELETE' }),
+  api2('/classes', { method: 'POST', body: { name: 'Mine', count: 3 } }),
+  api2(`/classes/${cls.id}`, { method: 'PUT', body: { name: 'x' } }),
+  api2(`/classes/${cls.id}`, { method: 'DELETE' }),
+  api2('/backup'),
+  api2('/restore', { method: 'POST', body: { format: 'human-or-not-workspace' } }),
+]);
+check('only the admin can change the setup or back up', forbidden.every((r) => r.status === 403), forbidden.map((r) => r.status).join(','));
+check('nothing was changed', (await api(`/contexts/${ctxId}`)).status === 200 && (await api(`/classes/${cls.id}`)).data.name === '10B Science');
+
+const cls2 = (await api('/classes', { method: 'POST', body: { name: '9A Science', count: 3, personaSet: 'secondary', contextId: ctxId } })).data;
+check('the admin makes a second class', cls2.size === 3 && cls2.contextId === ctxId);
+check('teacher 2 sees it straight away', (await api2('/classes')).data.some((c) => c.id === cls2.id));
+const full2 = (await api(`/classes/${cls2.id}`)).data;
+check('login codes are unique across classes', !full2.students.some((s) => full.students.some((t) => t.code === s.code)));
 
 // Written updates
 await resetCalls();
@@ -288,19 +295,16 @@ check('retraining finishes', await until(async () => (await api(`/contexts/${ctx
 const trainCall = (await getCalls()).find((c) => c.system.includes('prepare briefings'));
 check('Claude is given the update, dated, and told it wins over the files',
   Boolean(trainCall?.messages[0].content.includes('jam sandwich algorithm') && trainCall.messages[0].content.includes('the update wins') && /\[\d{4}-\d{2}-\d{2}\] Day 2/.test(trainCall.messages[0].content)));
-check('teacher 2 sees the update on the shared context', (await api2('/contexts')).data.find((c) => c.id === ctxId).updates.length === 1);
+check('teacher 2 sees the update', (await api2('/contexts')).data.find((c) => c.id === ctxId).updates.length === 1);
 const updId = upd.data.updates[0].id;
-check('teacher 2 cannot remove it', (await api2(`/contexts/${ctxId}/updates/${updId}`, { method: 'DELETE' })).status === 404);
-check('teacher 1 can remove it', (await api(`/contexts/${ctxId}/updates/${updId}`, { method: 'DELETE' })).data.updates.length === 0);
+check('teacher 2 cannot remove it', (await api2(`/contexts/${ctxId}/updates/${updId}`, { method: 'DELETE' })).status === 403);
+check('the admin can remove it', (await api(`/contexts/${ctxId}/updates/${updId}`, { method: 'DELETE' })).data.updates.length === 0);
 await until(async () => (await api(`/contexts/${ctxId}`)).data.status === 'ready');
-check('unsharing takes it away again', (await api(`/contexts/${ctxId}/share`, { method: 'PUT', body: { teachers: [] } })).data.sharedWith.length === 0
-  && !(await api2('/contexts')).data.some((c) => c.id === ctxId) && (await api2(`/contexts/${ctxId}`)).status === 404);
-await api2(`/classes/${cls2.id}`, { method: 'PUT', body: { contextId: null } });
 
 // Both teachers run an activity at the same time.
 await api('/activities', { method: 'POST', body: { classId: cls.id, name: 'T1 live', durationSec: 60, mode: 'open', blockSize: 1 } });
 const act2 = await api2('/activities', { method: 'POST', body: { classId: cls2.id, name: 'T2 live', durationSec: 60, mode: 'open', blockSize: 1 } });
-check('teacher 2 can start while teacher 1 is running', act2.status === 200, act2.data.error || '');
+check('teacher 2 can start with the admin\'s class while teacher 1 is running', act2.status === 200, act2.data.error || '');
 await rejoin();
 const teacher2 = io(URL);
 await new Promise((r) => teacher2.on('connect', r));
@@ -315,7 +319,7 @@ for (const s2 of full2.students) {
   const k = { sock, n: s2.n, state: null };
   sock.on('state', (st) => { k.state = st; });
   const res = await emit(sock, 'student:join', { code: s2.code });
-  check(`teacher 2's Student ${s2.n} lands in teacher 2's activity`, res.ok && res.activity === 'T2 live');
+  check(`9A's Student ${s2.n} lands in teacher 2's activity`, res.ok && res.activity === 'T2 live');
   kids2.push(k);
 }
 await sleep(300);
@@ -326,11 +330,16 @@ check('teacher 2\'s students are chatting', kids2.every((k) => k.state?.phase ==
 check('teacher 1\'s students are still waiting', kids.every((k) => k.state?.phase === 'lobby'));
 check('teacher 1\'s round controls do not touch teacher 2', (await cmd('live:startRound')).ok && view2.roundNumber === 1 && view.roundNumber === 1);
 check('teacher 2 ends their own round only', (await emit(teacher2, 'live:endRound', {})).ok && (await sleep(200), kids2.every((k) => k.state?.phase === 'guess') && kids.every((k) => k.state?.phase === 'active')));
-const backup2 = (await api2('/backup')).data;
-check('a backup holds only that teacher\'s things', backup2.classes.length === 1 && backup2.classes[0].id === cls2.id && backup2.activities.length === 1);
 await emit(teacher2, 'live:finish', {});
 await cmd('live:finish');
 for (const k of kids2) k.sock.close();
+const list2 = (await api2('/activities')).data;
+check('teacher 2 sees only their own activities', list2.length === 1 && list2[0].id === act2.data.id);
+const listAdmin = (await api('/activities')).data;
+check('the admin sees every teacher\'s activities, labelled', listAdmin.some((a) => a.id === act2.data.id && a.teacherName === 'Ms Second') && listAdmin.some((a) => a.teacherId === '1'));
+check('the admin can download teacher 2\'s activity', (await api(`/activities/${act2.data.id}/zip`)).status === 200);
+const backupAll = (await api('/backup')).data;
+check('the admin\'s backup holds everything, every teacher\'s activities included', backupAll.activities.some((a) => a.id === act2.data.id) && backupAll.classes.some((c) => c.id === cls2.id));
 
 console.log('\n--- 11. one big class, several teachers ---');
 check('a class can have up to 100 students', (await api('/classes', { method: 'POST', body: { name: 'Too big', count: 101 } })).status === 400);
@@ -339,14 +348,11 @@ check('a 100-student class is created', cohort.size === 100 && cohort.mine);
 const cohortFull = (await api(`/classes/${cohort.id}`)).data;
 const cards100 = await api(`/classes/${cohort.id}/cards.pdf`);
 check('its login cards cover all 100', cards100.data.toString('latin1').includes(cohortFull.students[99].code));
-check('teacher 2 cannot use it before it is shared', (await api2(`/classes/${cohort.id}`)).status === 404);
-check('teacher 1 shares it with teacher 2', (await api(`/classes/${cohort.id}/share`, { method: 'PUT', body: { teachers: ['2'] } })).data.sharedWith.join() === '2');
 const seen2 = (await api2('/classes')).data.find((c) => c.id === cohort.id);
-check('teacher 2 sees it, shared by teacher 1', seen2 && !seen2.mine && seen2.owner.name === 'Teacher 1');
+check('teacher 2 sees it, set up by teacher 1', seen2 && !seen2.mine && seen2.owner.name === 'Teacher 1');
 check('teacher 2 can print its cards', (await api2(`/classes/${cohort.id}/cards.pdf`)).status === 200);
-check('teacher 2 cannot change, share or delete it', (await api2(`/classes/${cohort.id}`, { method: 'PUT', body: { name: 'x' } })).status === 404
-  && (await api2(`/classes/${cohort.id}/share`, { method: 'PUT', body: { teachers: ['3'] } })).status === 404
-  && (await api2(`/classes/${cohort.id}`, { method: 'DELETE' })).status === 404);
+check('teacher 2 cannot change or delete it', (await api2(`/classes/${cohort.id}`, { method: 'PUT', body: { name: 'x' } })).status === 403
+  && (await api2(`/classes/${cohort.id}`, { method: 'DELETE' })).status === 403);
 
 const a1 = (await api('/activities', { method: 'POST', body: { classId: cohort.id, name: 'Room A', mode: 'open', blockSize: 1 } })).data;
 const a2 = (await api2('/activities', { method: 'POST', body: { classId: cohort.id, name: 'Room B', mode: 'open', blockSize: 1 } })).data;
@@ -373,7 +379,7 @@ const ownerText = ownerZip.data.toString('latin1');
 check('the class owner downloads every teacher\'s activities, one folder each', ownerZip.status === 200
   && ownerText.includes(`TCHE2615-Cohort/${a1.saveName}/report.html`) && ownerText.includes(`TCHE2615-Cohort/${a2.saveName}/report.html`));
 const otherZip = (await api2(`/classes/${cohort.id}/activities.zip`)).data.toString('latin1');
-check('a teacher it is shared with downloads only their own', otherZip.includes(a2.saveName) && !otherZip.includes(a1.saveName));
+check('another teacher downloads only their own', otherZip.includes(a2.saveName) && !otherZip.includes(a1.saveName));
 const oneZip = await fetch(`${URL}/api/activities/${a1.id}/zip`, { headers: { 'x-teacher-code': CODE } });
 check('a single activity downloads under its save name', (oneZip.headers.get('content-disposition') || '').includes(`${a1.saveName}.zip`));
 

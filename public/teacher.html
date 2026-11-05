@@ -26,26 +26,32 @@
   <div class="topbar">
     <div class="brand"><h1>Human or Not?</h1><span class="small muted"><span id="teacher-name">Teacher console</span> · <a href="#" id="sign-out">sign out</a></span></div>
     <nav class="nav" id="nav">
-      <button data-tab="home" class="on">Home</button>
-      <button data-tab="train"><span class="num">1</span>Train the AI</button>
-      <button data-tab="classes"><span class="num">2</span>Classes</button>
-      <button data-tab="activities"><span class="num">3</span>Activities</button>
+      <button data-tab="activities" class="on">Start activity</button>
       <button data-tab="live" id="nav-live" class="hidden">● Live</button>
+      <button data-tab="home" id="nav-setup" class="setup-btn hidden" title="Admin settings: contexts, classes, data">⚙ Setup</button>
     </nav>
   </div>
+  <!-- Admin only: the setup pages, tucked behind ⚙ Setup. -->
+  <nav class="nav subnav hidden" id="subnav">
+    <span class="tiny muted subnav-label">Setup</span>
+    <button data-tab="home">Overview</button>
+    <button data-tab="train"><span class="num">1</span>Train the AI</button>
+    <button data-tab="classes"><span class="num">2</span>Classes</button>
+    <button data-tab="activities" class="subnav-back">← Back to activities</button>
+  </nav>
   <div id="banners" class="stack" style="margin-bottom:16px"></div>
   <div id="flash" class="small" style="margin:-6px 0 10px;min-height:1.2em;color:var(--accent-2)"></div>
 
   <!-- ============================================================ home -->
-  <div data-page="home">
+  <div data-page="home" class="hidden">
     <div class="card">
-      <h2>Welcome</h2>
-      <p class="muted">Students chat with either a classmate or an AI pretending to be one, then guess which.
-        Round by round the AI studies your class and gets harder to catch — or you play on and swap the models yourself. Here is the whole set-up:</p>
+      <h2>Setup</h2>
+      <p class="muted">You are the admin. You train the AI and set up the classes here, once; every teacher then just starts activities with them.
+        Students chat with either a classmate or an AI pretending to be one, then guess which. Here is the whole set-up:</p>
       <div class="steps" id="steps">
         <div class="step" data-step="train"><div class="n">Step 1</div><strong>Train the AI</strong><div class="small muted">Download the context files, fill them in with any AI tool, upload them.</div></div>
         <div class="step" data-step="classes"><div class="n">Step 2</div><strong>Set up a class</strong><div class="small muted">Name it, choose a student type, print the login cards.</div></div>
-        <div class="step" data-step="activities"><div class="n">Step 3</div><strong>Start an activity</strong><div class="small muted">Pick the class, name the activity, project the console.</div></div>
+        <div class="step" data-step="activities"><div class="n">Step 3</div><strong>Start an activity</strong><div class="small muted">You and the other teachers: pick the class, name the activity, project the console.</div></div>
         <div class="step" data-step="live"><div class="n">Step 4</div><strong>Run the rounds</strong><div class="small muted">Three ways to play. Then the overview, then the download.</div></div>
       </div>
     </div>
@@ -62,7 +68,7 @@
       </div>
     </div>
     <div class="card">
-      <h2>Your data</h2>
+      <h2>Data</h2>
       <p class="small muted" id="storage-line"></p>
       <div class="row" style="align-items:center">
         <div class="shrink"><button id="backup-btn" class="ghost">⬇ Back up everything</button></div>
@@ -139,9 +145,10 @@
   </div>
 
   <!-- ====================================================== activities -->
-  <div data-page="activities" class="hidden">
+  <div data-page="activities">
     <div class="card">
-      <h2>3 · Start an activity</h2>
+      <h2>Start a new activity</h2>
+      <div id="act-empty" class="warnbox hidden" style="margin-bottom:14px"></div>
       <div class="grid2">
         <div class="field"><label for="act-class">Class</label><select id="act-class"></select></div>
         <div class="field"><label for="act-name">Activity name</label><input id="act-name" placeholder="e.g. Preservice teachers — week 6"></div>
@@ -158,7 +165,7 @@
       <div id="act-error" class="error"></div>
     </div>
     <div class="card">
-      <h2>Past activities</h2>
+      <h2 id="act-past-title">Past activities</h2>
       <div id="act-list"><p class="muted small">None yet.</p></div>
     </div>
   </div>

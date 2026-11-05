@@ -218,3 +218,10 @@ th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color:
 .act-group-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 6px; border-bottom: 2px solid var(--warn-line); }
 .act-group-head h3 { margin: 0; }
 .act-group-head button { margin-left: auto; }
+
+/* ------------------------------------------------------- admin setup nav */
+.nav .setup-btn { border-style: dashed; }
+.subnav { margin: -8px 0 18px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 12px; background: var(--panel-2); align-items: center; }
+.subnav-label { text-transform: uppercase; letter-spacing: .08em; margin-right: 4px; }
+.subnav .subnav-back { margin-left: auto; }
+@media (max-width: 760px) { .subnav .subnav-back { margin-left: 0; } }

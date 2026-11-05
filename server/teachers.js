@@ -11,6 +11,10 @@
  * A teacher with no password set is shown as "not set up" and cannot sign in.
  */
 
+/** Teacher 1 is the admin: they set up contexts and classes for everyone. */
+export const ADMIN_ID = '1';
+export const isAdmin = (teacher) => teacher?.id === ADMIN_ID;
+
 const COUNT = Math.max(1, Math.min(9, Number(process.env.TEACHER_COUNT) || 3));
 
 export function loadTeachers(env = process.env) {
