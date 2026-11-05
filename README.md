@@ -15,7 +15,7 @@
 Your students chat for three minutes with *someone*. A classmate across the room — or Claude,
 pretending to be one. Then they guess.
 
-Here's the twist: **after every round, Claude Opus reads every conversation**, works out what
+Here's the twist: **after every round, Claude reads every conversation**, works out what
 gave the AI away, and quietly teaches it to do better. Round 1 it's polite, curious and easy to
 catch. By round 3 it's complaining about the TPA, admitting it zoned out in the lecture, and
 playing along with your class's in-jokes.
@@ -37,8 +37,9 @@ assessment — because the evidence is the students' own chats.
 ### Before class — train it on *your* students
 
 Download three short templates, fill them in with any AI tool and your unit plan, and upload.
-Opus reads them, writes the brief every AI "classmate" works from, and tells you exactly what
-would make it harder to catch.
+Claude reads them, writes the brief every AI "classmate" works from, and tells you exactly what
+would make it harder to catch. As the course goes on, type a quick update ("Day 2: we did
+computational thinking…") and the AI catches up.
 
 <p align="center"><img src="docs/screenshots/train.png" alt="Training the AI on the class context" width="90%"></p>
 
@@ -55,8 +56,9 @@ Two persona sets written for real Australian classrooms. Untick anyone you don't
 
 ### Print the login cards
 
-Name the class, say how many students — get a PDF of cut-out cards. No accounts, no emails,
-no names on screen.
+Name the class, say how many students (up to 100) — get a PDF of cut-out cards. No accounts,
+no emails, no names on screen. Each activity takes up to 50 of them at a time, so a big cohort
+can be split across teachers running at once.
 
 <p align="center"><img src="docs/screenshots/login-cards.png" alt="Printable login cards" width="55%"></p>
 
@@ -66,7 +68,7 @@ no names on screen.
 
 | Mode | Rounds | Learning? | Models |
 |---|---|---|---|
-| **Three rounds, learning** | 3 | Opus teaches the AI after every round | Haiku, Sonnet and Opus every round |
+| **Three rounds, learning** | 3 | Claude teaches the AI after every round | Haiku, Sonnet and Opus every round |
 | **Four rounds, learning, then a switch** | 4 | After rounds 1–3 | All three in rounds 1–3; round 4 uses the models you pick (Opus off by default). Students aren't told. |
 | **Open play** | A block of 1–6 at a time, then *keep going* (up to 12) | None. The AI works from the class brief every round | You choose the models for every round, between rounds |
 
@@ -100,15 +102,15 @@ Students type their code on their phone, read a four-sentence notice, and wait. 
 
 ### After each round — the class sees what gave it away
 
-<p align="center"><img src="docs/screenshots/results.png" alt="Round results and Opus's analysis" width="90%"></p>
+<p align="center"><img src="docs/screenshots/results.png" alt="Round results and Claude's analysis" width="90%"></p>
 
-While you talk through the results, Opus writes up the AI's tells, the strategies students
+While you talk through the results, Claude writes up the AI's tells, the strategies students
 used, what they were interested in — and the new instructions the AI gets for next round.
 Students start adapting too. It becomes an arms race, and they can see it.
 
 ### The finale — an animated story of your class vs the machine
 
-After the last round, Opus writes a one-off presentation of the whole activity. Same design every
+After the last round, Claude writes a one-off presentation of the whole activity. Same design every
 time; every word written for *this* class.
 
 <table>
@@ -128,8 +130,10 @@ time; every word written for *this* class.
 
 ### Afterwards — keep everything
 
-One click downloads a ZIP: a printable report, the animated overview (works offline), every
-transcript, CSVs for your own analysis, and what Opus learned. What the AI learned also
+One click downloads a ZIP, named for who ran it, when, and with which class
+(`teacher-1_2026-11-09_09-30_TCHE2615-Cohort`): a printable report, the animated overview
+(works offline), every transcript, CSVs for your own analysis, and what the AI learned.
+Activities are kept together under their class. What the AI learned also
 carries into your next class, so it starts smarter every time.
 
 ---
@@ -141,9 +145,10 @@ carries into your next class, so it starts smarter every time.
 - **The model switch is a lesson on its own.** Does the "best" model matter, or does context matter more?
 - **Three ways to play.** Learning over three rounds, a secret model switch in round 4, or open play for as long as the class wants.
 - **It's honest.** Students are told up front an AI might be involved. No personal details, ever. If anyone is distressed, the AI drops the act and points them to you.
+- **Built for teaching teams.** Up to three teachers on one site, each with their own console, sharing classes and contexts when they want to.
 - **It costs almost nothing.** Free hosting; a few US dollars of API credit for a class of 25.
 
-<p align="center"><img src="docs/screenshots/console-home.png" alt="The teacher console home page" width="90%"><br><sub>The teacher console walks you through it in four steps.</sub></p>
+<p align="center"><img src="docs/screenshots/console-home.png" alt="The teacher console home page" width="90%"><br><sub>Each teacher's console walks them through it in four steps.</sub></p>
 
 ---
 
@@ -155,8 +160,8 @@ You need two things: a [Render](https://render.com) account (free) and a
 1. **Get a Claude API key.** At [console.anthropic.com](https://console.anthropic.com), add a
    little credit, then *API keys → Create key*. Copy it. While you are there, set a monthly
    spend limit under *Limits* — it is good practice.
-2. **Put this project on Render.** Fork this repository to your own GitHub account, then in
-   Render choose **New → Blueprint** and pick your fork. Render reads `render.yaml` and sets
+2. **Put this project on Render.** Fork this repository to your own GitHub account (or use
+   your own copy), then in Render choose **New → Blueprint** and pick it. Render reads `render.yaml` and sets
    up the website and a free database for you.
 3. **Fill in the secrets Render asks for:**
    - `ANTHROPIC_API_KEY` — the key from step 1.
@@ -169,10 +174,14 @@ You need two things: a [Render](https://render.com) account (free) and a
 
 ### Three teachers, one deployment
 
-Each teacher has their own console, password, contexts, classes and activities — none of
-them can see the others'. All three can run an activity **at the same time**: students
-just type the code on their card, and it takes them to their own teacher's activity.
-Backups are per teacher too.
+Each teacher has their own console, password, contexts, classes and activities. Nobody sees
+another teacher's things unless they are shared with them (below). All three can run an
+activity **at the same time**: students just type the code on their card, and it takes them
+to the right activity. Backups are per teacher too.
+
+To show names instead of *Teacher 1*, set `TEACHER_1_NAME` (and 2, 3) in Render. An older
+deployment's `TEACHER_CODE` still works as Teacher 1's password. If you leave a teacher's
+`TEACHER_N_CODE` empty, that console is switched off.
 
 **One big class, several teachers.** Make the class once (say all 100 students of a course),
 print the cards, and **Share** it with the other teachers. Each teacher then starts their own
@@ -184,9 +193,11 @@ can download all of them as one ZIP (**⬇ All activities**), and each other tea
 **Sharing a context.** A teacher can **Share** a context with any of the others, which suits
 teachers running parallel classes of the same course. The others can use it for their classes,
 read it, and **Make my own copy** to change. Only the owner can edit, update or delete it. What
-the other teachers' activities learn is added to the shared context too. To show names instead of *Teacher 1*, set
-`TEACHER_1_NAME` (and 2, 3) in Render. An older deployment's `TEACHER_CODE` still works
-as Teacher 1's password.
+the other teachers' activities learn is added to the shared context too.
+
+**Your own web address.** In Render → your service → **Settings → Custom Domains**, add e.g.
+`human-or-not.yourschool.edu.au`, then add the **CNAME** record Render shows at your domain
+host. Set `PUBLIC_URL` to the new address so the login cards print it.
 
 <p align="center"><img src="docs/screenshots/teacher-picker.png" alt="Choosing a teacher console" width="55%"></p>
 
@@ -205,13 +216,13 @@ Download the three context files — **01 About the class**, **02 What we've lea
 unit plan. The console gives you a prompt to paste. Upload the completed files and press
 **Train the AI**.
 
-Claude Opus reads them and writes the brief every AI chat partner works from, then tells you
+Claude reads them and writes the brief every AI chat partner works from, then tells you
 what is missing (*"Add ten real example messages"*). **The more context you give, the harder
 the AI is to catch** — file 03, real (paraphrased) student writing, matters most of all.
 
 **Keep it current with updates.** Once a context is trained, use **✎ Add update** to type
 what has happened since: *"Day 2: we covered computational thinking — the jam sandwich
-algorithm went hilariously wrong."* Opus folds each dated update into the brief, and newer
+algorithm went hilariously wrong."* Claude folds each dated update into the brief, and newer
 updates win where they disagree with the files. So on day 3 the AI knows day 2. Updates can
 be removed again, and **Replace files** keeps them.
 
@@ -247,22 +258,22 @@ The default, **four rounds, learning, then a switch**:
 | Round | AI partners | What they know |
 |---|---|---|
 | 1 | Haiku, Sonnet, Opus | Your class brief |
-| 2 | Haiku, Sonnet, Opus | + what Opus learned from round 1 |
-| 3 | Haiku, Sonnet, Opus | + what Opus learned from rounds 1–2 |
+| 2 | Haiku, Sonnet, Opus | + what Claude learned from round 1 |
+| 3 | Haiku, Sonnet, Opus | + what Claude learned from rounds 1–2 |
 | 4 | Haiku, Sonnet (or whichever models you pick) | Opus switched off. **Students are not told.** |
 
 **Three rounds, learning** is rounds 1–3 on their own. In **open play** every round works
-from the class brief alone, with the models you pick. Opus does not analyse the rounds, and
+from the class brief alone, with the models you pick. Claude does not analyse the rounds, and
 you add more rounds a block at a time.
 
 Each round: students are paired at random — about half with a classmate, half with the AI,
 which models shared evenly — they chat until the clock runs out, then guess. Results appear
 as soon as everyone has guessed (or when you press *Show results*). While you talk through
-them, in the learning modes, **Claude Opus reads every conversation** and writes what gave the AI away, how
+them, in the learning modes, **Claude reads every conversation** and writes what gave the AI away, how
 students tried to catch it, what they were interested in, and new instructions for the next
 round. All of it is shown on screen and saved.
 
-After the last round, Opus writes an **animated overview** of the whole activity: the pass
+After the last round, Claude writes an **animated overview** of the whole activity: the pass
 rate round by round and model by model, what the AI learned (in the learning modes), the
 story of the activity, what the model switch or the model mix did, quotes from the chats, findings and discussion
 questions. Same presentation every time; its content is written fresh for each class.
@@ -295,8 +306,8 @@ folder each. Each activity's download gives you:
 |---|---|
 | `report.html` | Start here: every round, all findings, every transcript. Prints to PDF. |
 | `overview/overview.html` | The animated overview. Opens offline in any browser — show it again, share it. |
-| `overview/overview.json` | The overview content Opus wrote, as data. |
-| `analysis/round-N.md` / `.json` | What Opus found after each round and the guidance it gave the AI. |
+| `overview/overview.json` | The overview content Claude wrote, as data. |
+| `analysis/round-N.md` / `.json` | What Claude found after each round and the guidance it gave the AI. |
 | `data/messages.csv` | Every message: round, conversation, model, persona, speaker, time, text. |
 | `data/results.csv` | One row per student per round: partner, model, persona, guess, correct. |
 | `data/rounds.csv` | One row per round: the headline numbers, overall and per model. |
@@ -321,13 +332,16 @@ contexts, classes and activities when the service sleeps. Render's free database
 permanently. Without a database the console warns you that nothing is being kept.
 
 **What it costs.** You pay Anthropic for what the AI uses; Render is free. As a rough
-guide, a class of 25 across four learning rounds uses a few US dollars of API credit — most of it
-Opus, which thinks hardest. Smaller classes and shorter rounds cost less, and open play skips the analysis entirely. Check
+guide, a class of 25 across four learning rounds uses a few US dollars of API credit or less: the chat partners do most of the
+talking, and the reading and writing in between is done by Sonnet to keep it cheap. Smaller classes and shorter rounds cost less, and open play skips the analysis entirely. Check
 *Usage* in the Anthropic console after your first run, and set a spend limit.
 
-**Models.** The console uses the newest Haiku, Sonnet and Opus your API key can access,
-found automatically each time the service starts. Effort is medium for Haiku and Sonnet and
-high for Opus. To pin a model, set `MODEL_HAIKU`, `MODEL_SONNET` or `MODEL_OPUS` in Render.
+**Models.** The chat partners are the newest Haiku, Sonnet and Opus your API key can access,
+found automatically each time the service starts (effort medium for Haiku and Sonnet, high
+for Opus). Training the brief, analysing each round and writing the overview are done by
+**Sonnet at medium effort**, with detailed step-by-step instructions, to keep costs down. To
+use Opus for those instead, set `ANALYST_MODEL=opus` and `ANALYST_EFFORT=high` in Render. To
+pin a model, set `MODEL_HAIKU`, `MODEL_SONNET` or `MODEL_OPUS`.
 
 **Privacy and safety.** Conversations are sent to the Claude API to generate replies and
 the analysis. Check your school or university's policy on using AI tools with students,
@@ -336,8 +350,8 @@ details, and if a student raises distress or asks sincerely to stop, it drops th
 tells them to speak to their teacher. Anthropic's API is not used to train models on your
 data by default.
 
-**One activity per teacher at a time.** Each teacher runs one live activity at a time; the
-three teachers can run theirs simultaneously. Three busy classes at once is fine on the
+**One activity per teacher at a time, up to 50 students each.** Each teacher runs one live
+activity at a time; the three teachers can run theirs simultaneously, even with the same class. Three busy classes at once is fine on the
 free plan, but each one uses its own API credit.
 
 ---
@@ -374,16 +388,17 @@ node test/screenshots.mjs
 
 ```
 server/
-  index.js      web server, teacher API, live websocket
+  index.js      web server, teacher API, live websocket, sharing
+  teachers.js   the teacher consoles and their passwords
   activity.js   the round engine: pairing, chat, guesses, results
   modes.js      the three ways to play and their round plans
   bot.js        the AI classmate: briefing, rules, pacing
-  analysis.js   Opus: training, per-round analysis, the overview story
+  analysis.js   Claude (Sonnet): training, per-round analysis, the overview story
   claude.js     model discovery, effort, the API wrapper
   personas.js   the two persona sets
   text.js       reply length, trimming, openers
   pdf.js        login codes and the printable cards
-  report.js     the report, CSVs, standalone overview, the ZIP
+  report.js     the report, CSVs, standalone overview, the ZIPs and their names
   store.js      Postgres or files
 templates/      the three context files educators download
 public/         the student page, the teacher console, the overview

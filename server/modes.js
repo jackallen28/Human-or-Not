@@ -17,7 +17,7 @@ export const MODES = {
     id: 'learn3',
     label: 'Three rounds, learning',
     short: '3 rounds · learning',
-    description: 'All three models every round. After each round Claude Opus reads the chats and teaches the AI what gave it away.',
+    description: 'All three models every round. After each round Claude reads the chats and teaches the AI what gave it away.',
     learning: true,
   },
   learn4: {

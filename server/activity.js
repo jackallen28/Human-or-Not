@@ -11,13 +11,13 @@ import { ensurePlan, extendPlan, modeInfo, setRoundModels, MAX_ROUNDS } from './
  * One activity, live, with one class. The rounds come from the activity's
  * plan (see modes.js):
  *
- *   learn3  three rounds, every model, Opus teaching the AI after each round
+ *   learn3  three rounds, every model, Claude teaching the AI after each round
  *   learn4  the same, then a fourth round with the models the educator chose
  *           (by default Opus switched off; students are not told)
  *   open    blocks of rounds with no learning; the educator picks the models
  *           for each round and keeps adding blocks as long as they like
  *
- * In the learning modes, after each round's results Opus reads the transcripts
+ * In the learning modes, after each round's results Claude reads the transcripts
  * and writes guidance for the next round. At the end it writes the overview.
  * Everything is written to the store as it happens, so a finished activity
  * can be downloaded later and a crash mid-activity loses at most the round in
@@ -141,7 +141,7 @@ export class LiveActivity extends EventEmitter {
       return { ok: false, error: this.mode.id === 'open' ? 'Add more rounds to keep going.' : 'All the rounds are done.' };
     }
     if (this.phase === PHASES.RESULTS && this.analysing) {
-      return { ok: false, error: 'Opus is still analysing the last round. It will be ready in a moment.' };
+      return { ok: false, error: 'Claude is still analysing the last round. It will be ready in a moment.' };
     }
     const present = [...this.students.values()].filter((s) => s.connected);
     if (present.length === 0) return { ok: false, error: 'No students are logged in yet.' };
@@ -507,7 +507,7 @@ export class LiveActivity extends EventEmitter {
     if (this.phase !== PHASES.RESULTS || !this.planDone) {
       return { ok: false, error: `The overview comes after round ${this.plan.length}.` };
     }
-    if (this.analysing) return { ok: false, error: 'Opus is still analysing the last round.' };
+    if (this.analysing) return { ok: false, error: 'Claude is still analysing the last round.' };
     this.phase = PHASES.OVERVIEW;
     this.emit('phase');
     if (!this.record.overview) this.runOverview();

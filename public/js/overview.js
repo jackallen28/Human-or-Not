@@ -1,7 +1,7 @@
 /*
  * The end-of-activity overview: an animated, self-running presentation of
  * every round. The same template for every activity; the numbers come from the
- * app and the words from Claude Opus, so what it says and what it emphasises
+ * app and the words from Claude, so what it says and what it emphasises
  * changes with each class.
  *
  * Usage: HumanOrNotOverview.render(element, data)  — data from overviewData().
@@ -60,7 +60,7 @@
         if (!mode.learning) text = 'Same class brief. No learning between rounds.';
         else if (p.number === 1) text = 'Started from the class brief alone.';
         else if (p.final && p.secret) text = `<strong>${esc(listNames(off))} switched off.</strong> Nobody was told.`;
-        else text = `Plus everything Opus learned from ${p.number > 2 ? `rounds 1–${p.number - 1}` : 'round 1'}.`;
+        else text = `Plus everything it learned from ${p.number > 2 ? `rounds 1–${p.number - 1}` : 'round 1'}.`;
         return `<div class="ov-plan-card ov-rise" style="--d:${Math.min(i * 350, 2100)}ms">
           <div class="ov-plan-n">Round ${p.number}</div>
           <div class="ov-models">${Object.keys(MODEL_NAMES).map((m) => `<span class="ov-model ${p.models.includes(m) ? '' : 'off'}" style="--c:${MODEL_COLOURS[m]}">${MODEL_NAMES[m]}</span>`).join('')}</div>
@@ -92,7 +92,7 @@
     if (learned.length) {
       out.push(`<section class="ov-slide">
         <div class="ov-kicker">What the AI was taught</div>
-        <h2>After each round, Opus read every chat and rewrote the rules</h2>
+        <h2>After each round, Claude read every chat and rewrote the rules</h2>
         <div class="ov-timeline">${learned.map((r, i) => `<div class="ov-step ov-rise" style="--d:${i * 700}ms">
           <div class="ov-plan-n">After round ${r.number}</div>
           <ul>${r.guidance.slice(0, 3).map((g) => `<li>${esc(g)}</li>`).join('')}</ul>

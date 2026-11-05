@@ -8,7 +8,7 @@ import { marked } from 'marked';
 import { Server as SocketServer } from 'socket.io';
 import { openStore, newId } from './store.js';
 import { hasApiKey, models, resolveModels } from './claude.js';
-import { contextWordCount, extractSamples, trainContext } from './analysis.js';
+import { analystInfo, contextWordCount, extractSamples, trainContext } from './analysis.js';
 import { PERSONA_SETS, personaCatalog, personaSet } from './personas.js';
 import { buildCardsPdf, generateCodes } from './pdf.js';
 import { LiveActivity, PHASES, MAX_ACTIVITY_STUDENTS, MAX_CLASS_STUDENTS } from './activity.js';
@@ -33,7 +33,7 @@ const onFreeRenderDisk = store.kind === 'files' && process.env.RENDER && !proces
 console.log('[server] Human or Not? — educator edition');
 console.log(`[server] Storage: ${store.describe()}${onFreeRenderDisk ? ' — NOT PERSISTENT on Render (wiped when the service sleeps). Add DATABASE_URL.' : ''}`);
 console.log(hasApiKey()
-  ? `[server] Claude models: ${Object.values(models()).map((m) => `${m.label} (${m.id}, ${m.source})`).join(', ')}`
+  ? `[server] Claude models: ${Object.values(models()).map((m) => `${m.label} (${m.id}, ${m.source})`).join(', ')}; briefs and analysis: ${analystInfo().label} at ${analystInfo().effort} effort`
   : '[server] No ANTHROPIC_API_KEY — AI partners send filler lines and nothing is analysed.');
 console.log(`[server] Teachers: ${TEACHERS.map((t) => `${t.name} (/teacher/${t.id}${t.code ? '' : ', not set up'})`).join(', ')}`);
 for (const warning of teacherWarnings()) console.warn(`[server] ${warning}`);
@@ -123,15 +123,25 @@ const wrap = (fn) => (req, res) => Promise.resolve(fn(req, res)).catch((err) => 
   res.status(500).json({ error: err.message || 'Something went wrong.' });
 });
 
+/**
+ * The address students type: PUBLIC_URL if set; otherwise the address the
+ * teacher is using right now (so a custom domain just works); otherwise
+ * Render's own onrender.com address.
+ */
 function joinUrl(req) {
-  const fixed = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
-  return fixed || `${req.protocol}://${req.get('host')}`;
+  const fixed = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  if (fixed) return /^https?:\/\//.test(fixed) ? fixed : `https://${fixed}`;
+  const host = req.get('host');
+  if (host && !/^(localhost|127\.)/.test(host) && process.env.RENDER) return `https://${host}`;
+  if (host) return `${req.protocol}://${host}`;
+  return (process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
 }
 
 api.get('/meta', wrap(async (req, res) => {
   res.json({
     hasApiKey: hasApiKey(),
     models: models(),
+    analyst: analystInfo(),
     personaSets: personaCatalog(),
     modes: Object.values(MODES),
     maxStudentsPerClass: MAX_CLASS_STUDENTS,
@@ -173,7 +183,7 @@ const contextSummary = (req) => (c) => {
 
 /**
  * Rebuild a context's brief from its files and updates. If the files or
- * updates change while Opus is working, it goes round again so the newest
+ * updates change while Claude is working, it goes round again so the newest
  * version always wins.
  */
 async function runTraining(id) {
@@ -451,7 +461,8 @@ api.delete('/classes/:id', wrap(async (req, res) => {
 api.get('/classes/:id/cards.pdf', wrap(async (req, res) => {
   const cls = await usableClass(req, req.params.id);
   if (!cls) return res.status(404).json({ error: 'Not found.' });
-  const pdf = buildCardsPdf({ title: cls.name, joinUrl: joinUrl(req).replace(/^https?:\/\//, ''), cards: cls.students });
+  // The cards print the full address, e.g. https://human-or-not.allentronics.com.au/
+  const pdf = buildCardsPdf({ title: cls.name, joinUrl: `${joinUrl(req)}/`, cards: cls.students });
   res.setHeader('content-type', 'application/pdf');
   res.setHeader('content-disposition', `attachment; filename="${cls.name.replace(/[^\w -]+/g, '').trim() || 'class'} - login cards.pdf"`);
   res.send(pdf);

@@ -141,7 +141,8 @@
     $('banners').innerHTML = banners.join('');
     $('model-list').innerHTML = `<strong>Models in use</strong><br>${Object.values(meta.models).map((m) =>
       `${esc(m.label)} <span class="tiny">(${esc(m.id)} · effort ${esc(m.effort)})</span>`).join('<br>')}
-      <br><span class="tiny">Picked automatically: the newest of each family your API key can use.</span>`;
+      <br><span class="tiny">Picked automatically: the newest of each family your API key can use.</span>
+      ${meta.analyst ? `<br><br><strong>Reads the chats and writes the briefs</strong><br>${esc(meta.analyst.label)} <span class="tiny">(effort ${esc(meta.analyst.effort)})</span>` : ''}`;
     $('storage-line').textContent = meta.storage.persistent
       ? `Stored in ${meta.storage.description}. A backup file is still a good idea.`
       : 'Not persistent on this server — back up after every session and restore when you return.';
@@ -266,7 +267,7 @@
             <div class="row" style="margin-top:8px;align-items:center">
               <div class="shrink"><button class="small" data-sendupd="${c.id}">Add update and retrain →</button></div>
               <div class="shrink"><button class="ghost small" data-close="${c.id}">Cancel</button></div>
-              <div class="tiny muted">Claude Opus folds it into the brief. Newer updates win where they disagree with the files.</div>
+              <div class="tiny muted">Claude folds it into the brief. Newer updates win where they disagree with the files.</div>
             </div></div>` : ''}
           ${panel === 'share' ? `<div class="ctx-panel">
             <label>Share with</label>
@@ -318,7 +319,7 @@
         await api(`/contexts/${id}/updates`, { method: 'POST', body: { text } });
         drafts.delete(id);
         openPanels.delete(id);
-        flash('Update added. Claude Opus is retraining the brief — about a minute.');
+        flash('Update added. Claude is retraining the brief — about a minute.');
         await refreshAll();
       } catch (err) { flash(err.message); b.disabled = false; }
     });
@@ -764,7 +765,7 @@
 
     const body = $('analysis-body');
     if (r.analysisStatus === 'running' || r.analysisStatus === 'pending') {
-      body.innerHTML = '<p class="muted"><span class="spinner"></span>Claude Opus is reading every conversation from this round…</p>';
+      body.innerHTML = '<p class="muted"><span class="spinner"></span>Claude is reading every conversation from this round…</p>';
     } else if (r.analysisStatus === 'failed') {
       body.innerHTML = `<p style="color:var(--warn)">The analysis did not finish: ${esc(r.analysisError || '')}</p><button id="retry-an" class="small">Try again</button>`;
       $('retry-an').onclick = () => command('live:retryAnalysis');
@@ -798,7 +799,7 @@
         : off.length ? `${famList(off)} will be quietly switched off. Students are not told.` : 'All three models stay on.';
     }
     const offNext = next ? FAMILIES.filter((f) => !next.models.includes(f)) : [];
-    $('next-note').textContent = analysing ? 'Ready as soon as Opus has finished — usually under a minute.'
+    $('next-note').textContent = analysing ? 'Ready as soon as Claude has finished — usually under a minute.'
       : next?.secret && offNext.length && live.mode.learning ? `Round ${next.number} quietly switches ${famList(offNext)} off.`
         : canMore ? 'Keep going, or show the overview to finish.' : '';
   }

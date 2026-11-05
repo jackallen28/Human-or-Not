@@ -194,7 +194,7 @@ export function overviewHtml(record) {
 </body></html>`;
 }
 
-/** What the presentation needs: the numbers from the app, the words from Opus. */
+/** What the presentation needs: the numbers from the app, the words from Claude. */
 export function overviewData(record) {
   ensurePlan(record);
   const mode = modeInfo(record.mode);
@@ -306,8 +306,8 @@ function readme(record) {
     '',
     'report.html ................ start here: every round, findings, and every transcript',
     'overview/overview.html ..... the animated end-of-activity overview; opens offline in any browser',
-    'overview/overview.json ..... the overview content Claude Opus wrote',
-    'analysis/round-N.md ........ what Opus found after each round, and the guidance it gave the AI',
+    'overview/overview.json ..... the overview content Claude wrote',
+    'analysis/round-N.md ........ what Claude found after each round, and the guidance it gave the AI',
     'analysis/round-N.json ...... the same, as data',
     'data/messages.csv .......... every message: round, conversation, model, persona, speaker, time, text',
     'data/results.csv ........... one row per student per round: partner, model, guess, correct',

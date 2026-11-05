@@ -37,7 +37,7 @@ function pageStream({ title, joinUrl, cards, pageNo, pageCount }) {
   ops.push('0.93 0.54 0.16 rg');
   text(MARGIN, PAGE_H - MARGIN - 14, 16, 'F2', title);
   ops.push('0.35 0.35 0.35 rg');
-  text(MARGIN, PAGE_H - MARGIN - 32, 9, 'F1', `Human or Not? - login cards. Cut along the dotted lines. Students go to ${joinUrl} and enter their code.`);
+  text(MARGIN, PAGE_H - MARGIN - 32, 9, 'F1', `Login cards: cut along the dotted lines. Students go to ${joinUrl} and enter their code.`);
   text(PAGE_W - MARGIN - 60, PAGE_H - MARGIN - 14, 9, 'F1', `Page ${pageNo} of ${pageCount}`);
 
   const gridTop = PAGE_H - MARGIN - HEADER;

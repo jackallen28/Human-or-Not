@@ -149,7 +149,7 @@ export function startDemo(port) {
       }
       if (system.includes('prepare briefings')) return send(message(request.model, JSON.stringify(BRIEF)));
       if (system.includes('analyse transcripts')) {
-        const round = /This is round (\d)/.exec(JSON.stringify(request.messages))?.[1] || '1';
+        const round = /This was round (\d+)/.exec(JSON.stringify(request.messages))?.[1] || '1';
         return send(message(request.model, JSON.stringify(ANALYSES[round])));
       }
       if (system.includes('honest, engaging summaries')) return send(message(request.model, JSON.stringify(OVERVIEW)));

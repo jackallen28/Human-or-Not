@@ -61,7 +61,7 @@ export function startMock(port) {
         })));
       }
       if (system.includes('analyse transcripts')) {
-        const round = /This is round (\d)/.exec(JSON.stringify(request.messages))?.[1];
+        const round = /This was round (\d+)/.exec(JSON.stringify(request.messages))?.[1];
         return reply(res, message(request.model, '```json\n' + JSON.stringify({
           headline: `Round ${round}: the AI asked too many questions.`,
           summary: 'Students caught it by asking about lunch.',

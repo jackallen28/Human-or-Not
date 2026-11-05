@@ -49,8 +49,8 @@ check('a context is accepted and starts training', created.status === 200 && cre
 const ctxId = created.data.id;
 check('training finishes', await until(async () => (await api('/contexts')).data[0].status === 'ready'));
 const ctx = (await api(`/contexts/${ctxId}`)).data;
-check('Opus wrote the brief', ctx.brief.includes('sea otter') && ctx.model === 'claude-opus-5-5');
-check('training used Opus at high effort', (await getCalls()).some((c) => c.model === 'claude-opus-5-5' && c.effort === 'high' && c.system.includes('prepare briefings')));
+check('Sonnet wrote the brief', ctx.brief.includes('sea otter') && ctx.model === 'claude-sonnet-5-5');
+check('training used Sonnet at medium effort', (await getCalls()).some((c) => c.model === 'claude-sonnet-5-5' && c.effort === 'medium' && c.system.includes('prepare briefings')));
 check('example messages merge the file and the brief', ctx.sampleMessages.includes('idk the otter one') && ctx.sampleMessages.includes('ok but why does the kelp care'));
 check('gaps are reported back to the educator', ctx.gaps.length > 0);
 
@@ -134,7 +134,8 @@ for (let round = 1; round <= 4; round++) {
   await sleep(300);
   check(`round ${round}: results appear once everyone has guessed`, view.phase === 'results' && kids.every((k) => k.state?.phase === 'results'));
   check(`round ${round}: each student sees their own result`, kids.every((k) => typeof k.state?.result?.correct === 'boolean'));
-  check(`round ${round}: Opus analyses the round`, await until(() => view.round?.analysisStatus === 'done'));
+  check(`round ${round}: Claude analyses the round`, await until(() => view.round?.analysisStatus === 'done'));
+  if (round === 1) check('the analysis uses Sonnet at medium effort', (await getCalls()).some((c) => c.system.includes('analyse transcripts') && c.model === 'claude-sonnet-5-5' && c.effort === 'medium'));
   check(`round ${round}: the analysis headline is shown`, view.round.analysis.headline.startsWith(`Round ${round}`));
   check(`round ${round}: per-model stats`, Object.keys(view.round.stats.byModel).length === (round === 4 ? 2 : 3) || Object.keys(view.round.stats.byModel).length >= 1);
 }
@@ -145,7 +146,8 @@ check('what the activity learned is saved to the class context for next time',
 
 console.log('\n--- 6. the overview ---');
 check('the overview opens after round 4', (await emit(teacher, 'live:overview', {})).ok);
-check('Opus writes it', await until(() => view.overviewStatus === 'done' && view.overviewData));
+check('Claude writes it', await until(() => view.overviewStatus === 'done' && view.overviewData));
+check('the overview uses Sonnet at medium effort', (await getCalls()).some((c) => c.system.includes('honest, engaging summaries') && c.model === 'claude-sonnet-5-5' && c.effort === 'medium'));
 check('it carries all four rounds and the story', view.overviewData.rounds.length === 4 && view.overviewData.story.title === '10B vs the machine');
 check('students are told to look at the screen', kids.every((k) => k.state?.phase === 'overview'));
 
@@ -178,7 +180,7 @@ check('a non-backup is refused', (await api('/restore', { method: 'POST', body: 
 console.log('\n--- 9. the other modes ---');
 check('the three modes are offered', meta.modes.map((m) => m.id).join(',') === 'learn3,learn4,open');
 const cmd = async (ev, p = {}) => { const r = await emit(teacher, ev, p); await sleep(200); return r; };
-const opusCalls = async () => (await getCalls()).filter((c) => c.system.includes('analyse transcripts')).length;
+const analysisCalls = async () => (await getCalls()).filter((c) => c.system.includes('analyse transcripts')).length;
 const rejoin = async () => {
   for (const k of kids) await emit(k.sock, 'student:join', { code: full.students[k.n - 1].code });
   await sleep(200);
@@ -199,7 +201,7 @@ check('learn3: three rounds planned, all models', view.roundCount === 3 && view.
 check('learn3: the models are fixed', !(await cmd('live:setModels', { models: ['haiku'] })).ok);
 for (let r = 1; r <= 3; r++) {
   await quickRound(`learn3 round ${r}`, ['haiku', 'sonnet', 'opus']);
-  check(`learn3 round ${r}: Opus analyses it`, await until(() => view.round?.analysisStatus === 'done'));
+  check(`learn3 round ${r}: Claude analyses it`, await until(() => view.round?.analysisStatus === 'done'));
 }
 check('learn3: no fourth round', !(await cmd('live:startRound', {})).ok);
 check('learn3: no more rounds can be added', !(await cmd('live:moreRounds', {})).ok);
@@ -224,7 +226,7 @@ check('open: two rounds planned with the starting models', view.roundCount === 2
 check('open: round 1 models can be changed in the lobby', (await cmd('live:setModels', { models: ['haiku'] })).ok && view.plan[0].models.join() === 'haiku');
 check('open: at least one model is required', !(await cmd('live:setModels', { models: [] })).ok);
 await quickRound('open round 1', ['haiku']);
-check('open: no analysis between rounds', view.round.analysisStatus === 'off' && (await opusCalls()) === 0);
+check('open: no analysis between rounds', view.round.analysisStatus === 'off' && (await analysisCalls()) === 0);
 check('open: round 2 models can be changed after results', (await cmd('live:setModels', { models: ['sonnet', 'opus'] })).ok);
 await quickRound('open round 2', ['sonnet', 'opus']);
 check('open: the block ends', !(await cmd('live:startRound', {})).ok);
@@ -233,11 +235,11 @@ check('open: the new block carries the last models on', view.plan[2].models.join
 await quickRound('open round 3', ['sonnet', 'opus']);
 check('open: the overview waits for the block to finish', !(await cmd('live:overview', {})).ok);
 await quickRound('open round 4', ['sonnet', 'opus']);
-check('open: still no analysis', (await opusCalls()) === 0);
+check('open: still no analysis', (await analysisCalls()) === 0);
 check('open: the overview opens', (await cmd('live:overview', {})).ok);
 check('open: the overview carries four rounds and no learning', await until(() => view.overviewData?.rounds.length === 4 && view.overviewData.mode.learning === false));
 const overviewPrompt = (await getCalls()).find((c) => c.system.includes('honest, engaging summaries'));
-check('open: Opus is told the AI did not learn', Boolean(overviewPrompt?.messages?.[0]?.content?.includes('did NOT learn')));
+check('open: Claude is told the AI did not learn', Boolean(overviewPrompt?.messages?.[0]?.content?.includes('did NOT learn')));
 await cmd('live:finish', {});
 const openRow = (await api('/activities')).data[0];
 check('open: listed with its mode and rounds', openRow.mode === 'Open play' && openRow.rounds === 4 && openRow.planned === 4 && openRow.hasOverview);
@@ -284,7 +286,7 @@ const upd = await api(`/contexts/${ctxId}/updates`, { method: 'POST', body: { te
 check('an update is added and retraining starts', upd.status === 200 && upd.data.updates.length === 1 && upd.data.status === 'training');
 check('retraining finishes', await until(async () => (await api(`/contexts/${ctxId}`)).data.status === 'ready'));
 const trainCall = (await getCalls()).find((c) => c.system.includes('prepare briefings'));
-check('Opus is given the update, dated, and told it wins over the files',
+check('Claude is given the update, dated, and told it wins over the files',
   Boolean(trainCall?.messages[0].content.includes('jam sandwich algorithm') && trainCall.messages[0].content.includes('the update wins') && /\[\d{4}-\d{2}-\d{2}\] Day 2/.test(trainCall.messages[0].content)));
 check('teacher 2 sees the update on the shared context', (await api2('/contexts')).data.find((c) => c.id === ctxId).updates.length === 1);
 const updId = upd.data.updates[0].id;

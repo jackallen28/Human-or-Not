@@ -26,7 +26,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hon-shots-'));
 const server = spawn('node', [path.join(here, '..', 'server', 'index.js')], {
   env: {
     ...process.env, PORT: '3600', TEACHER_1_CODE: CODE, TEACHER_2_CODE: 'demo-2', TEACHER_3_CODE: 'demo-3', DATA_DIR: dataDir, DATABASE_URL: '',
-    PUBLIC_URL: 'https://human-or-not.onrender.com',
+    PUBLIC_URL: 'https://human-or-not.allentronics.com.au',
     ANTHROPIC_API_KEY: 'sk-ant-demo', ANTHROPIC_BASE_URL: 'http://localhost:3601',
     BOT_THINK_MS: '200', BOT_REPLY_CAP_MS: '500', BOT_WPM_MIN: '400', BOT_WPM_MAX: '500', BOT_HOLD_BACK: '1',
   },

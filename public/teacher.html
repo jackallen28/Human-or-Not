@@ -54,7 +54,7 @@
       <div class="grid2">
         <div>
           <p class="small"><strong>Three rounds, learning.</strong> The latest Claude <strong>Haiku</strong>, <strong>Sonnet</strong> and <strong>Opus</strong> every round, shared evenly among the students paired with an AI.
-            After each round, Opus reads every conversation and teaches the AI what gave it away.</p>
+            After each round, Claude reads every conversation and teaches the AI what gave it away.</p>
           <p class="small"><strong>Four rounds, learning, then a switch.</strong> The same three learning rounds, then a fourth with the models you choose — by default Opus quietly switched off. Students are not told.</p>
           <p class="small"><strong>Open play.</strong> A few rounds at a time, as many as you like. No learning between rounds — instead you choose which models play each round.</p>
         </div>
@@ -101,7 +101,7 @@
         <div class="drop" data-slot="voice"><div class="file">03 · Student voice</div><div class="small muted">Optional, but powerful</div></div>
       </div>
       <input type="file" id="ctx-file" accept=".md,.markdown,.txt,text/markdown,text/plain" class="hidden">
-      <p class="tiny muted" style="margin-top:10px">“Training” here means Claude Opus reads your files and writes a brief that every AI chat partner works from. The models themselves are not retrained.</p>
+      <p class="tiny muted" style="margin-top:10px">“Training” here means Claude reads your files and writes a brief that every AI chat partner works from. The models themselves are not retrained.</p>
       <button id="ctx-train" style="margin-top:6px">Train the AI →</button>
       <div id="ctx-error" class="error"></div>
     </div>
@@ -229,7 +229,7 @@
         <div class="pairs" id="res-pairs"></div>
       </div>
       <div class="card" id="analysis-card">
-        <h3 id="analysis-title">What Opus learned from this round</h3>
+        <h3 id="analysis-title">What the AI learned from this round</h3>
         <div id="analysis-body"></div>
       </div>
       <div class="card hidden" id="next-models-card">
@@ -245,7 +245,7 @@
     </div>
 
     <div id="live-overview" class="hidden">
-      <div id="overview-wait" class="card center"><span class="spinner"></span> Claude Opus is writing the overview of all four rounds…</div>
+      <div id="overview-wait" class="card center"><span class="spinner"></span> Claude is writing the overview of the activity…</div>
       <div id="overview-host"></div>
       <div class="center" style="margin-top:16px">
         <button id="btn-zip-live" class="big">⬇ Download all activity data (ZIP)</button>
