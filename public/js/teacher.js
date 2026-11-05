@@ -48,10 +48,11 @@
     if (message) setTimeout(() => { if ($('flash').textContent === message) $('flash').textContent = ''; }, 7000);
   }
 
-  function confirmBox(title, body, yes = 'Yes') {
+  function confirmBox(title, body, yes = 'Yes', no = 'Cancel') {
     $('confirm-title').textContent = title;
     $('confirm-body').textContent = body;
     $('confirm-yes').textContent = yes;
+    $('confirm-no').textContent = no;
     $('confirm').classList.remove('hidden');
     return new Promise((resolve) => {
       const done = (answer) => { $('confirm').classList.add('hidden'); $('confirm-yes').onclick = null; $('confirm-no').onclick = null; resolve(answer); };
@@ -445,6 +446,7 @@
         <div style="flex:1 1 320px"><div class="title">${esc(c.name)}
             ${c.mine ? (sharedNames.length ? `<span class="pill">Shared with ${esc(sharedNames.join(', '))}</span>` : '') : `<span class="pill ai">Shared by ${esc(c.owner.name)}</span>`}</div>
           <div class="small muted">${c.size} students · ${esc(c.personaSetLabel)} · ${c.personas.length} personas · context: ${ctxLabel}</div>
+          ${c.activities || c.learnedFrom ? `<div class="tiny muted">${c.activities} past activit${c.activities === 1 ? 'y' : 'ies'}${c.learnedFrom ? ` · the AI has learned from ${c.learnedFrom} of them` : ''}</div>` : ''}
           ${c.mine && openClassShare.has(c.id) ? `<div class="ctx-panel">
             <label>Share this class with</label>
             <div class="row" style="gap:8px">${others.map((t) => `<label class="persona ${c.sharedWith.includes(t.id) ? '' : 'off'}" style="flex:0 0 auto">
@@ -464,6 +466,7 @@
           <button class="ghost small" data-add="${c.id}">+ Students</button>
 ` : ''}
           <button class="ghost small" data-clszip="${c.id}">⬇ ${c.mine ? 'All activities' : 'My activities'} (ZIP)</button>
+          ${isAdmin ? `<button class="ghost small" data-resetcls="${c.id}" title="Back to the original context: forget what the AI learned from this class">↺ Reset</button>` : ''}
           ${c.mine ? `<button class="danger small" data-delcls="${c.id}">Delete</button>` : ''}
         </div></div>`;
     }).join('') : '<p class="muted small">None yet.</p>';
@@ -501,6 +504,21 @@
       await api(`/classes/${c.id}`, { method: 'PUT', body: { count: more } });
       flash('Added. Download the login cards again to get the new codes.');
       refreshAll();
+    });
+    for (const b of host.querySelectorAll('[data-resetcls]')) b.addEventListener('click', async () => {
+      const c = classes.find((x) => x.id === b.dataset.resetcls);
+      if (!await confirmBox(`Reset “${c.name}”?`,
+        `The AI forgets what it learned from this class's activities${c.learnedFrom ? ` (${c.learnedFrom})` : ''}, so the next activity starts from the original context: your files and written updates. Login codes stay the same.`, 'Reset')) return;
+      let deleteActivities = false;
+      if (c.activities) {
+        deleteActivities = await confirmBox(`Also delete its ${c.activities} past activit${c.activities === 1 ? 'y' : 'ies'}?`,
+          'Their transcripts, results and overviews are deleted for every teacher. Keep them to keep them downloadable; download the class ZIP first if you want a copy.', 'Delete them', 'Keep them');
+      }
+      try {
+        const res = await api(`/classes/${c.id}/reset`, { method: 'POST', body: { deleteActivities } });
+        flash(`“${c.name}” reset${res.forgotten ? `: the AI forgot ${res.forgotten} lesson set${res.forgotten === 1 ? '' : 's'}` : ''}${res.deleted ? `, ${res.deleted} activit${res.deleted === 1 ? 'y' : 'ies'} deleted` : ''}.`);
+        refreshAll();
+      } catch (err) { flash(err.message); }
     });
     for (const b of host.querySelectorAll('[data-delcls]')) b.addEventListener('click', async () => {
       const c = classes.find((x) => x.id === b.dataset.delcls);
@@ -655,6 +673,27 @@
     $('backup-note').textContent = 'Saved. Keep this file somewhere safe.';
   });
   $('restore-btn').addEventListener('click', () => $('restore-file').click());
+
+  async function resetData(scope) {
+    const what = scope === 'everything'
+      ? 'every context, class, login code and activity, for every teacher'
+      : 'every teacher\'s activities and results (contexts and classes stay)';
+    if (!await confirmBox(scope === 'everything' ? 'Reset everything?' : 'Delete all activities?',
+      `This permanently deletes ${what}. A backup file of everything downloads first, so you can restore it if you need to.`, 'Download backup and continue')) return;
+    await download('/backup', 'human-or-not-backup.json');
+    const typed = prompt('Type RESET (in capitals) to confirm.');
+    if (typed !== 'RESET') { flash('Reset cancelled.'); return; }
+    try {
+      const res = await api('/reset', { method: 'POST', body: { scope, confirm: 'RESET' } });
+      const c = res.counts;
+      flash(scope === 'everything'
+        ? `Reset done: removed ${c.contexts} contexts, ${c.classes} classes and ${c.activities} activities.`
+        : `Removed ${c.activities} activities. Contexts and classes are untouched.`);
+      await refreshAll();
+    } catch (err) { flash(err.message); }
+  }
+  $('reset-activities').addEventListener('click', () => resetData('activities'));
+  $('reset-everything').addEventListener('click', () => resetData('everything'));
   $('restore-file').addEventListener('change', (e) => {
     const file = e.target.files?.[0];
     if (!file) return;

@@ -225,3 +225,7 @@ th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color:
 .subnav-label { text-transform: uppercase; letter-spacing: .08em; margin-right: 4px; }
 .subnav .subnav-back { margin-left: auto; }
 @media (max-width: 760px) { .subnav .subnav-back { margin-left: 0; } }
+
+/* ----------------------------------------------------------- danger zone */
+.danger-zone { margin-top: 22px; padding: 16px; border: 1px solid var(--danger-line); background: var(--danger-bg); border-radius: 12px; }
+.danger-zone h3 { color: var(--danger); margin-top: 0; }

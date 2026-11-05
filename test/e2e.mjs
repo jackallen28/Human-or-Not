@@ -383,6 +383,34 @@ check('another teacher downloads only their own', otherZip.includes(a2.saveName)
 const oneZip = await fetch(`${URL}/api/activities/${a1.id}/zip`, { headers: { 'x-teacher-code': CODE } });
 check('a single activity downloads under its save name', (oneZip.headers.get('content-disposition') || '').includes(`${a1.saveName}.zip`));
 
+console.log('\n--- 12. resetting ---');
+const clsRow = (await api('/classes')).data.find((c) => c.id === cls.id);
+check('a class shows how much the AI learned from it', clsRow.activities > 0 && clsRow.learnedFrom > 0, `${clsRow.activities} activities, learned from ${clsRow.learnedFrom}`);
+check('only the admin can reset a class', (await api2(`/classes/${cls.id}/reset`, { method: 'POST', body: {} })).status === 403);
+const activitiesBefore = (await api('/activities')).data.filter((a) => a.classId === cls.id).length;
+const r1 = (await api(`/classes/${cls.id}/reset`, { method: 'POST', body: { deleteActivities: false } })).data;
+check('resetting a class makes the AI forget what it learned there', r1.ok && r1.forgotten > 0 && r1.deleted === 0);
+const ctxAfter = (await api(`/contexts/${ctxId}`)).data;
+const clsActivityIds = new Set((await api('/activities')).data.filter((a) => a.classId === cls.id).map((a) => a.id));
+check('the context keeps its files and updates, without that class\'s learnings', ctxAfter.brief && !(ctxAfter.learnings || []).some((l) => l.classId === cls.id || clsActivityIds.has(l.activityId)));
+check('its activities are kept unless asked', (await api('/activities')).data.filter((a) => a.classId === cls.id).length === activitiesBefore);
+const r2 = (await api(`/classes/${cls.id}/reset`, { method: 'POST', body: { deleteActivities: true } })).data;
+check('a class reset can also delete its activities', r2.deleted === activitiesBefore && !(await api('/activities')).data.some((a) => a.classId === cls.id));
+check('its login codes still work after a reset', (await api(`/classes/${cls.id}`)).data.students[0].code === full.students[0].code);
+
+check('a database reset needs RESET typed', (await api('/reset', { method: 'POST', body: { scope: 'everything', confirm: 'yes' } })).status === 400);
+check('only the admin can reset the database', (await api2('/reset', { method: 'POST', body: { scope: 'everything', confirm: 'RESET' } })).status === 403);
+await api2('/activities', { method: 'POST', body: { classId: cls2.id, name: 'Still going', mode: 'open', blockSize: 1 } });
+check('no reset while any teacher is running an activity', (await api('/reset', { method: 'POST', body: { scope: 'activities', confirm: 'RESET' } })).status === 409);
+await emit(teacher2, 'live:finish', {});
+const ra = (await api('/reset', { method: 'POST', body: { scope: 'activities', confirm: 'RESET' } })).data;
+check('"delete all activities" removes every teacher\'s activities', ra.ok && ra.counts.activities > 0 && (await api('/activities')).data.length === 0 && (await api2('/activities')).data.length === 0);
+check('…and keeps contexts and classes, minus what was learned', (await api('/classes')).data.length > 0 && ((await api(`/contexts/${ctxId}`)).data.learnings || []).length === 0);
+const re = (await api('/reset', { method: 'POST', body: { scope: 'everything', confirm: 'RESET' } })).data;
+check('"reset everything" empties the site', re.ok && re.counts.classes > 0 && re.counts.contexts > 0
+  && (await api('/classes')).data.length === 0 && (await api('/contexts')).data.length === 0 && (await api('/activities')).data.length === 0);
+check('old login codes no longer work', (await emit(io(URL), 'student:join', { code: full.students[0].code })).ok === false);
+
 teacher2.close();
 teacher.close();
 for (const k of kids) k.sock.close();

@@ -383,7 +383,72 @@ function readPersonas(body) {
 api.get('/classes', wrap(async (req, res) => {
   const all = (await store.list('classes')).filter((c) => canUse(req, c));
   all.sort((a, b) => (ownerOf(b) === req.teacher.id) - (ownerOf(a) === req.teacher.id) || b.createdAt - a.createdAt);
-  res.json(all.map(classSummary(req)));
+  // How much the AI has picked up from this class's activities, and how many it has.
+  const activities = await store.list('activities');
+  const contexts = new Map((await store.list('contexts')).map((c) => [c.id, c]));
+  const activityClass = new Map(activities.map((a) => [a.id, a.classId]));
+  res.json(all.map((c) => ({
+    ...classSummary(req)(c),
+    activities: activities.filter((a) => a.classId === c.id).length,
+    learnedFrom: (contexts.get(c.contextId)?.learnings || []).filter((l) => (l.classId || activityClass.get(l.activityId)) === c.id).length,
+  })));
+}));
+
+/**
+ * Reset a class: the AI forgets what it picked up from this class's
+ * activities, so the next one starts from the original context (the files and
+ * the admin's written updates). Optionally its past activities are deleted too.
+ */
+api.post('/classes/:id/reset', adminOnly, wrap(async (req, res) => {
+  const cls = await store.get('classes', req.params.id);
+  if (!cls) return res.status(404).json({ error: 'Not found.' });
+  if (classInUse(cls.id)) return res.status(409).json({ error: 'An activity is running with this class. Finish it first.' });
+  const activities = (await store.list('activities')).filter((a) => a.classId === cls.id);
+  const ids = new Set(activities.map((a) => a.id));
+  let forgotten = 0;
+  for (const context of await store.list('contexts')) {
+    const before = (context.learnings || []).length;
+    context.learnings = (context.learnings || []).filter((l) => !(l.classId === cls.id || ids.has(l.activityId)));
+    if (context.learnings.length !== before) {
+      forgotten += before - context.learnings.length;
+      await store.put('contexts', context.id, context);
+    }
+  }
+  let deleted = 0;
+  if (req.body?.deleteActivities) {
+    for (const a of activities) { await store.remove('activities', a.id); deleted += 1; }
+  }
+  res.json({ ok: true, forgotten, deleted });
+}));
+
+// ------------------------------------------------------------- reset data
+
+/**
+ * Admin only. scope "activities": delete every activity (contexts and classes
+ * stay, and the AI forgets what it learned from them). scope "everything":
+ * delete every context, class and activity. Refused while anything is live.
+ */
+api.post('/reset', adminOnly, wrap(async (req, res) => {
+  if (req.body?.confirm !== 'RESET') return res.status(400).json({ error: 'Type RESET to confirm.' });
+  const scope = req.body?.scope === 'everything' ? 'everything' : req.body?.scope === 'activities' ? 'activities' : null;
+  if (!scope) return res.status(400).json({ error: 'Choose what to reset.' });
+  if ([...lives.values()].some((l) => l.phase !== PHASES.FINISHED)) {
+    return res.status(409).json({ error: 'An activity is running. Every teacher must finish theirs first.' });
+  }
+  const counts = { contexts: 0, classes: 0, activities: 0 };
+  for (const a of await store.list('activities')) { await store.remove('activities', a.id); counts.activities += 1; }
+  if (scope === 'everything') {
+    for (const c of await store.list('classes')) { await store.remove('classes', c.id); counts.classes += 1; }
+    for (const c of await store.list('contexts')) { await store.remove('contexts', c.id); counts.contexts += 1; }
+  } else {
+    for (const c of await store.list('contexts')) {
+      if ((c.learnings || []).length) { c.learnings = []; await store.put('contexts', c.id, c); }
+    }
+  }
+  lives.clear();
+  for (const t of TEACHERS) pushTeachers(t.id);
+  console.log(`[server] ${req.teacher.name} reset ${scope}:`, counts);
+  res.json({ ok: true, scope, counts });
 }));
 
 api.get('/classes/:id', wrap(async (req, res) => {

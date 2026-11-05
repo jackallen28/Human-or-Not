@@ -481,6 +481,7 @@ export class LiveActivity extends EventEmitter {
     fresh.learnings.push({
       activityId: this.record.id,
       activityName: this.record.name,
+      classId: this.record.classId,
       round: round.number,
       at: Date.now(),
       guidance: round.analysis.guidance,

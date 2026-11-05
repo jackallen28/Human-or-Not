@@ -76,6 +76,16 @@
         <div><span class="small" id="backup-note"></span></div>
       </div>
       <input type="file" id="restore-file" accept=".json,application/json" class="hidden">
+      <div class="danger-zone">
+        <h3>Reset the database</h3>
+        <p class="small muted">Back up first: a reset cannot be undone. Nobody can be running an activity.</p>
+        <div class="row" style="align-items:flex-start">
+          <div><button id="reset-activities" class="danger">Delete all activities</button>
+            <div class="tiny muted" style="margin-top:6px">Every teacher's activities and results go. Contexts and classes stay, and the AI forgets what it learned from past activities.</div></div>
+          <div><button id="reset-everything" class="danger">Reset everything</button>
+            <div class="tiny muted" style="margin-top:6px">Contexts, classes, login codes and activities all go. Back to a fresh site. Teacher passwords stay (they are set in Render).</div></div>
+        </div>
+      </div>
     </div>
   </div>
 

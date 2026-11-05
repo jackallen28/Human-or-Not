@@ -332,9 +332,20 @@ class.** While the console is open it keeps the service awake.
 
 **Your data.** The blueprint adds a free Render Postgres database, which keeps your
 contexts, classes and activities when the service sleeps. Render's free databases
-**expire after 30 days**: use **Back up everything** on the console's Home page
+**expire after 30 days**: use **Back up everything** in Teacher 1's **⚙ Setup → Overview**
 (one file, restores with one click), or upgrade the database in Render to keep it
 permanently. Without a database the console warns you that nothing is being kept.
+
+**Starting again.** Two resets, both Teacher 1's:
+
+- **↺ Reset** on a class (Setup → Classes): the AI forgets what it picked up from that class's
+  past activities, so the next activity starts from the original context, meaning your files
+  and written updates. Login codes stay the same. It also offers to delete the class's past
+  activities.
+- **Reset the database** (Setup → Overview): **Delete all activities** (every teacher's
+  activities go; contexts and classes stay) or **Reset everything** (back to a fresh site).
+  A backup downloads first, you type `RESET` to confirm, and it is refused while anyone is
+  running an activity.
 
 **What it costs.** You pay Anthropic for what the AI uses; Render is free. As a rough
 guide, a class of 25 across four learning rounds uses a few US dollars of API credit or less: the chat partners do most of the
