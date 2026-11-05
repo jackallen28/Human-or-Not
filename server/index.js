@@ -138,50 +138,93 @@ api.get('/meta', wrap(async (req, res) => {
     storage: { kind: store.kind, description: store.describe(), persistent: !onFreeRenderDisk },
     joinUrl: joinUrl(req).replace(/^https?:\/\//, ''),
     teacher: { id: req.teacher.id, name: req.teacher.name },
+    teachers: publicTeachers(),
     live: (() => { const live = liveFor(req.teacher.id); return live ? { id: live.record.id, name: live.record.name, phase: live.phase } : null; })(),
   });
 }));
 
 // ----------------------------------------------------------------- contexts
 
-/** The bits of a context the list view needs (not the whole brief). */
-const contextSummary = (c) => ({
-  id: c.id, name: c.name, title: c.title, status: c.status, error: c.error || null, summary: c.summary,
-  strengths: c.strengths || [], gaps: c.gaps || [], words: c.words, samples: (c.sampleMessages || []).length,
-  learnings: (c.learnings || []).length, createdAt: c.createdAt, updatedAt: c.updatedAt,
-  files: Object.fromEntries(Object.entries(c.files || {}).map(([k, v]) => [k, Boolean(v && v.trim())])),
-});
+/** Can this teacher use a context: their own, or one shared with them. */
+const canUse = (req, c) => Boolean(c) && (ownerOf(c) === req.teacher.id || (c.sharedWith || []).includes(req.teacher.id));
+async function usable(req, id) {
+  const context = id ? await store.get('contexts', id) : null;
+  return canUse(req, context) ? context : null;
+}
+const teacherName = (id) => TEACHERS.find((t) => t.id === id)?.name || `Teacher ${id}`;
+const MAX_UPDATE = 4000;
 
+/** The bits of a context the list view needs (not the whole brief). */
+const contextSummary = (req) => (c) => {
+  const mine = ownerOf(c) === req.teacher.id;
+  return {
+    id: c.id, name: c.name, title: c.title, status: c.status, error: c.error || null, summary: c.summary,
+    strengths: c.strengths || [], gaps: c.gaps || [], words: c.words, samples: (c.sampleMessages || []).length,
+    learnings: (c.learnings || []).length, createdAt: c.createdAt, updatedAt: c.updatedAt,
+    files: Object.fromEntries(Object.entries(c.files || {}).map(([k, v]) => [k, Boolean(v && v.trim())])),
+    mine,
+    owner: { id: ownerOf(c), name: teacherName(ownerOf(c)) },
+    sharedWith: mine ? (c.sharedWith || []) : [],
+    updates: (c.updates || []).map((u) => ({ id: u.id, text: u.text, at: u.at })),
+  };
+};
+
+/**
+ * Rebuild a context's brief from its files and updates. If the files or
+ * updates change while Opus is working, it goes round again so the newest
+ * version always wins.
+ */
 async function runTraining(id) {
   const context = await store.get('contexts', id);
   if (!context) return;
+  const revision = context.revision || 0;
+  let result = null;
+  let error = null;
   try {
-    const result = await trainContext({ name: context.name, files: context.files });
-    Object.assign(context, {
+    result = await trainContext({ name: context.name, files: context.files, updates: context.updates || [] });
+  } catch (err) {
+    console.warn('[train] failed:', err.message);
+    error = err;
+  }
+  const fresh = await store.get('contexts', id);
+  if (!fresh) return;
+  if ((fresh.revision || 0) !== revision) return runTraining(id);
+  if (result) {
+    Object.assign(fresh, {
       title: result.title, summary: result.summary, brief: result.brief, sampleMessages: result.sampleMessages,
       strengths: result.strengths, gaps: result.gaps, model: result.model, status: 'ready', error: null,
       trainedAt: Date.now(), updatedAt: Date.now(),
     });
-  } catch (err) {
-    console.warn('[train] failed:', err.message);
-    context.status = 'failed';
-    context.error = err.message;
+  } else {
+    fresh.status = 'failed';
+    fresh.error = error.message;
     // Still usable: the bots can read the files directly.
-    context.brief = context.brief || Object.values(context.files).join('\n\n');
-    context.sampleMessages = context.sampleMessages?.length ? context.sampleMessages : extractSamples(context.files.voice);
+    fresh.brief = fresh.brief || Object.values(fresh.files).join('\n\n');
+    fresh.sampleMessages = fresh.sampleMessages?.length ? fresh.sampleMessages : extractSamples(fresh.files.voice);
   }
-  await store.put('contexts', id, context);
+  await store.put('contexts', id, fresh);
+}
+
+/** Save a changed context and start training it again. */
+async function retrain(context) {
+  context.revision = (context.revision || 0) + 1;
+  context.status = 'training';
+  context.updatedAt = Date.now();
+  await store.put('contexts', context.id, context);
+  runTraining(context.id);
 }
 
 api.get('/contexts', wrap(async (req, res) => {
-  const all = mineOnly(req, await store.list('contexts'));
-  res.json(all.sort((a, b) => b.createdAt - a.createdAt).map(contextSummary));
+  const all = (await store.list('contexts')).filter((c) => canUse(req, c));
+  // Your own first, then those shared with you; newest first within each.
+  all.sort((a, b) => (ownerOf(b) === req.teacher.id) - (ownerOf(a) === req.teacher.id) || b.createdAt - a.createdAt);
+  res.json(all.map(contextSummary(req)));
 }));
 
 api.get('/contexts/:id', wrap(async (req, res) => {
-  const context = await owned(req, 'contexts', req.params.id);
+  const context = await usable(req, req.params.id);
   if (!context) return res.status(404).json({ error: 'Not found.' });
-  res.json(context);
+  res.json({ ...context, mine: ownerOf(context) === req.teacher.id, owner: { id: ownerOf(context), name: teacherName(ownerOf(context)) } });
 }));
 
 api.post('/contexts', wrap(async (req, res) => {
@@ -199,30 +242,83 @@ api.post('/contexts', wrap(async (req, res) => {
     teacherId: req.teacher.id,
     name: String(req.body?.name || 'My class').trim().slice(0, 80) || 'My class',
     files, words, status: 'training', createdAt: Date.now(), updatedAt: Date.now(),
-    learnings: [], sampleMessages: [], brief: '',
+    learnings: [], sampleMessages: [], brief: '', updates: [], sharedWith: [], revision: 0,
   };
   await store.put('contexts', context.id, context);
   runTraining(context.id);
-  res.json(contextSummary(context));
+  res.json(contextSummary(req)(context));
 }));
 
 api.put('/contexts/:id', wrap(async (req, res) => {
   const context = await owned(req, 'contexts', req.params.id);
-  if (!context) return res.status(404).json({ error: 'Not found.' });
+  if (!context) return res.status(404).json({ error: 'Only the teacher who made this context can change it.' });
   for (const key of ['about', 'learned', 'voice']) {
     if (typeof req.body?.files?.[key] === 'string' && req.body.files[key].trim()) context.files[key] = req.body.files[key];
   }
   if (req.body?.name) context.name = String(req.body.name).slice(0, 80);
   context.words = contextWordCount(context.files);
-  context.status = 'training';
+  await retrain(context);
+  res.json(contextSummary(req)(context));
+}));
+
+// A written update on top of the files: "Today we covered…". Dated, kept in
+// order, and given priority over the files where they disagree.
+api.post('/contexts/:id/updates', wrap(async (req, res) => {
+  const context = await owned(req, 'contexts', req.params.id);
+  if (!context) return res.status(404).json({ error: 'Only the teacher who made this context can update it.' });
+  const text = String(req.body?.text || '').trim().slice(0, MAX_UPDATE);
+  if (text.length < 3) return res.status(400).json({ error: 'Write the update first.' });
+  context.updates = [...(context.updates || []), { id: newId('upd'), text, at: Date.now() }].slice(-30);
+  await retrain(context);
+  res.json(contextSummary(req)(context));
+}));
+
+api.delete('/contexts/:id/updates/:updateId', wrap(async (req, res) => {
+  const context = await owned(req, 'contexts', req.params.id);
+  if (!context) return res.status(404).json({ error: 'Only the teacher who made this context can change it.' });
+  const before = (context.updates || []).length;
+  context.updates = (context.updates || []).filter((u) => u.id !== req.params.updateId);
+  if (context.updates.length === before) return res.status(404).json({ error: 'Not found.' });
+  await retrain(context);
+  res.json(contextSummary(req)(context));
+}));
+
+// Share with other teachers: they can use it for their classes, read it and
+// copy it, but only the owner can change it.
+api.put('/contexts/:id/share', wrap(async (req, res) => {
+  const context = await owned(req, 'contexts', req.params.id);
+  if (!context) return res.status(404).json({ error: 'Only the teacher who made this context can share it.' });
+  const valid = new Set(TEACHERS.map((t) => t.id).filter((id) => id !== req.teacher.id));
+  context.sharedWith = [...new Set((Array.isArray(req.body?.teachers) ? req.body.teachers : []).map(String))].filter((id) => valid.has(id));
   context.updatedAt = Date.now();
   await store.put('contexts', context.id, context);
-  runTraining(context.id);
-  res.json(contextSummary(context));
+  res.json(contextSummary(req)(context));
+}));
+
+// Make your own editable copy of a context (your own or one shared with you).
+api.post('/contexts/:id/copy', wrap(async (req, res) => {
+  const source = await usable(req, req.params.id);
+  if (!source) return res.status(404).json({ error: 'Not found.' });
+  const copy = {
+    ...structuredClone(source),
+    id: newId('ctx'),
+    teacherId: req.teacher.id,
+    name: `${source.name} (copy)`.slice(0, 80),
+    title: source.title ? `${source.title} (copy)`.slice(0, 120) : source.title,
+    sharedWith: [],
+    learnings: [],
+    copiedFrom: { id: source.id, owner: teacherName(ownerOf(source)) },
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    revision: 0,
+  };
+  if (copy.status === 'training') copy.status = 'ready';
+  await store.put('contexts', copy.id, copy);
+  res.json(contextSummary(req)(copy));
 }));
 
 api.delete('/contexts/:id', wrap(async (req, res) => {
-  if (!await owned(req, 'contexts', req.params.id)) return res.status(404).json({ error: 'Not found.' });
+  if (!await owned(req, 'contexts', req.params.id)) return res.status(404).json({ error: 'Only the teacher who made this context can delete it.' });
   await store.remove('contexts', req.params.id);
   res.json({ ok: true });
 }));
@@ -262,7 +358,7 @@ api.post('/classes', wrap(async (req, res) => {
   const count = Math.floor(Number(req.body?.count));
   if (!name) return res.status(400).json({ error: 'Give the class a name.' });
   if (!(count >= 1 && count <= 60)) return res.status(400).json({ error: 'Between 1 and 60 students.' });
-  const contextId = req.body?.contextId && await owned(req, 'contexts', req.body.contextId) ? req.body.contextId : null;
+  const contextId = await usable(req, req.body?.contextId) ? req.body.contextId : null;
   const codes = generateCodes(count, await allCodes());
   const cls = {
     id: newId('cls'),
@@ -282,7 +378,7 @@ api.put('/classes/:id', wrap(async (req, res) => {
   if (!cls) return res.status(404).json({ error: 'Not found.' });
   if (req.body?.name) cls.name = String(req.body.name).trim().slice(0, 80);
   if ('contextId' in (req.body || {})) {
-    cls.contextId = req.body.contextId && await owned(req, 'contexts', req.body.contextId) ? req.body.contextId : null;
+    cls.contextId = await usable(req, req.body.contextId) ? req.body.contextId : null;
   }
   if (req.body?.personaSet) Object.assign(cls, readPersonas(req.body));
   const count = Math.floor(Number(req.body?.count));
@@ -337,7 +433,7 @@ api.post('/activities', wrap(async (req, res) => {
   if (!cls) return res.status(400).json({ error: 'Choose a class.' });
   const name = String(req.body?.name || '').trim().slice(0, 80);
   if (!name) return res.status(400).json({ error: 'Name the activity, e.g. "Preservice teachers, week 6".' });
-  const context = cls.contextId ? await owned(req, 'contexts', cls.contextId) : null;
+  const context = await usable(req, cls.contextId);
   const mode = MODES[req.body?.mode] ? req.body.mode : 'learn4';
   const record = {
     id: newId('act'),

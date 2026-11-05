@@ -172,7 +172,12 @@ You need two things: a [Render](https://render.com) account (free) and a
 Each teacher has their own console, password, contexts, classes and activities — none of
 them can see the others'. All three can run an activity **at the same time**: students
 just type the code on their card, and it takes them to their own teacher's activity.
-Backups are per teacher too. To show names instead of *Teacher 1*, set
+Backups are per teacher too.
+
+**Sharing a context.** A teacher can **Share** a context with any of the others, which suits
+teachers running parallel classes of the same course. The others can use it for their classes,
+read it, and **Make my own copy** to change. Only the owner can edit, update or delete it. What
+the other teachers' activities learn is added to the shared context too. To show names instead of *Teacher 1*, set
 `TEACHER_1_NAME` (and 2, 3) in Render. An older deployment's `TEACHER_CODE` still works
 as Teacher 1's password.
 
@@ -196,6 +201,12 @@ unit plan. The console gives you a prompt to paste. Upload the completed files a
 Claude Opus reads them and writes the brief every AI chat partner works from, then tells you
 what is missing (*"Add ten real example messages"*). **The more context you give, the harder
 the AI is to catch** — file 03, real (paraphrased) student writing, matters most of all.
+
+**Keep it current with updates.** Once a context is trained, use **✎ Add update** to type
+what has happened since: *"Day 2: we covered computational thinking — the jam sandwich
+algorithm went hilariously wrong."* Opus folds each dated update into the brief, and newer
+updates win where they disagree with the files. So on day 3 the AI knows day 2. Updates can
+be removed again, and **Replace files** keeps them.
 
 > "Training" here means the AI is *given* your context before every chat. The Claude
 > models themselves are not retrained, and nothing you upload is used to train them.

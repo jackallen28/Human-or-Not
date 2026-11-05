@@ -234,39 +234,130 @@
   });
 
   let trainingPoll = null;
-  function renderContexts() {
-    const host = $('ctx-list');
-    if (!contexts.length) { host.innerHTML = '<p class="muted small">None yet. Upload your files above.</p>'; }
-    else host.innerHTML = contexts.map((c) => `
+  const openPanels = new Map(); // context id -> 'update' | 'share'
+  const drafts = new Map();     // context id -> unsent update text
+  const when = (ts) => new Date(ts).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+
+  function contextItem(c) {
+    const status = c.status === 'training' ? '<span class="pill warn"><span class="spinner"></span>Training</span>'
+      : c.status === 'failed' ? '<span class="pill warn">Trained without Claude</span>' : '<span class="pill human">Ready</span>';
+    const others = (meta?.teachers || []).filter((t) => t.id !== meta.teacher.id);
+    const sharedNames = others.filter((t) => c.sharedWith.includes(t.id)).map((t) => t.name);
+    const panel = openPanels.get(c.id);
+    const updates = c.updates.length ? `<div class="updates">
+        <div class="tiny muted" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Updates since the files</div>
+        ${c.updates.map((u) => `<div class="update"><span class="tiny muted">${esc(when(u.at))}</span><span class="update-text">${esc(u.text)}</span>
+          ${c.mine ? `<button class="ghost small" data-delupd="${c.id}:${u.id}" title="Remove this update">✕</button>` : ''}</div>`).join('')}
+      </div>` : '';
+    return `
       <div class="list-item">
         <div style="flex:1 1 360px">
-          <div class="title">${esc(c.title || c.name)} ${c.status === 'training' ? '<span class="pill warn"><span class="spinner"></span>Training</span>'
-            : c.status === 'failed' ? '<span class="pill warn">Trained without Claude</span>' : '<span class="pill human">Ready</span>'}</div>
-          <div class="small muted">${c.words} words of context · ${c.samples} example messages${c.learnings ? ` · learned from ${c.learnings} round(s) of past activities` : ''}</div>
+          <div class="title">${esc(c.title || c.name)} ${status}
+            ${c.mine ? (sharedNames.length ? `<span class="pill">Shared with ${esc(sharedNames.join(', '))}</span>` : '')
+              : `<span class="pill ai">Shared by ${esc(c.owner.name)}</span>`}</div>
+          <div class="small muted">${c.words} words of context · ${c.samples} example messages${c.updates.length ? ` · ${c.updates.length} update${c.updates.length === 1 ? '' : 's'}` : ''}${c.learnings ? ` · learned from ${c.learnings} round(s) of past activities` : ''}</div>
           ${c.summary ? `<div class="small" style="margin-top:6px">${esc(c.summary)}</div>` : ''}
           ${c.status === 'failed' ? `<div class="small" style="color:var(--warn)">${esc(c.error || '')}</div>` : ''}
-          ${c.gaps?.length ? `<div class="small" style="margin-top:6px;color:var(--warn)"><strong>To make it harder to catch, add:</strong><ul style="margin:4px 0 0">${c.gaps.map((g) => `<li>${esc(g)}</li>`).join('')}</ul></div>` : ''}
+          ${c.mine && c.gaps?.length ? `<div class="small" style="margin-top:6px;color:var(--warn)"><strong>To make it harder to catch, add:</strong><ul style="margin:4px 0 0">${c.gaps.map((g) => `<li>${esc(g)}</li>`).join('')}</ul></div>` : ''}
+          ${updates}
+          ${panel === 'update' ? `<div class="ctx-panel">
+            <label for="upd-${c.id}">Add an update — what has happened since the files were written</label>
+            <textarea id="upd-${c.id}" data-draft="${c.id}" rows="5" placeholder="e.g. Day 2: we covered computational thinking — decomposition, patterns, abstraction, algorithms. Everyone laughed at the jam sandwich algorithm. Most still find 'abstraction' confusing.">${esc(drafts.get(c.id) || '')}</textarea>
+            <div class="row" style="margin-top:8px;align-items:center">
+              <div class="shrink"><button class="small" data-sendupd="${c.id}">Add update and retrain →</button></div>
+              <div class="shrink"><button class="ghost small" data-close="${c.id}">Cancel</button></div>
+              <div class="tiny muted">Claude Opus folds it into the brief. Newer updates win where they disagree with the files.</div>
+            </div></div>` : ''}
+          ${panel === 'share' ? `<div class="ctx-panel">
+            <label>Share with</label>
+            <div class="row" style="gap:8px">${others.map((t) => `<label class="persona ${c.sharedWith.includes(t.id) ? '' : 'off'}" style="flex:0 0 auto">
+              <input type="checkbox" data-shareto="${t.id}" ${c.sharedWith.includes(t.id) ? 'checked' : ''}>
+              <div class="name">${esc(t.name)}${t.ready ? '' : ' <span class="tiny muted">(not set up)</span>'}</div></label>`).join('') || '<span class="small muted">There are no other teachers on this server.</span>'}</div>
+            <div class="row" style="margin-top:8px;align-items:center">
+              <div class="shrink"><button class="small" data-saveshare="${c.id}">Save sharing</button></div>
+              <div class="shrink"><button class="ghost small" data-close="${c.id}">Cancel</button></div>
+              <div class="tiny muted">They can use it for their classes, read it and make their own copy. Only you can change it. What their activities learn is added to it too.</div>
+            </div></div>` : ''}
         </div>
         <div class="shrink row">
           <button class="ghost small" data-brief="${c.id}">View brief</button>
-          <button class="ghost small" data-retrain="${c.id}">Update files</button>
-          <button class="danger small" data-delctx="${c.id}">Delete</button>
+          ${c.mine ? `
+          <button class="small" data-panel="${c.id}:update">✎ Add update</button>
+          <button class="ghost small" data-retrain="${c.id}">Replace files</button>
+          <button class="ghost small" data-panel="${c.id}:share">Share</button>
+          <button class="danger small" data-delctx="${c.id}">Delete</button>` : `
+          <button class="ghost small" data-copy="${c.id}">Make my own copy</button>`}
         </div>
-      </div>`).join('');
+      </div>`;
+  }
 
+  function renderContexts() {
+    const host = $('ctx-list');
+    // Re-rendering must not lose an update someone is halfway through typing.
+    for (const t of host.querySelectorAll('[data-draft]')) drafts.set(t.dataset.draft, t.value);
+    const focused = document.activeElement?.dataset?.draft;
+    if (!contexts.length) host.innerHTML = '<p class="muted small">None yet. Upload your files above.</p>';
+    else host.innerHTML = contexts.map(contextItem).join('');
+    if (focused) { const t = host.querySelector(`[data-draft="${focused}"]`); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }
+
+    for (const t of host.querySelectorAll('[data-draft]')) t.addEventListener('input', () => drafts.set(t.dataset.draft, t.value));
+    for (const b of host.querySelectorAll('[data-panel]')) b.addEventListener('click', () => {
+      const [id, kind] = b.dataset.panel.split(':');
+      openPanels.get(id) === kind ? openPanels.delete(id) : openPanels.set(id, kind);
+      renderContexts();
+      host.querySelector(`[data-draft="${id}"]`)?.focus();
+    });
+    for (const b of host.querySelectorAll('[data-close]')) b.addEventListener('click', () => { openPanels.delete(b.dataset.close); renderContexts(); });
+    for (const box of host.querySelectorAll('[data-shareto]')) box.addEventListener('change', () => box.closest('.persona').classList.toggle('off', !box.checked));
+    for (const b of host.querySelectorAll('[data-sendupd]')) b.addEventListener('click', async () => {
+      const id = b.dataset.sendupd;
+      const text = host.querySelector(`[data-draft="${id}"]`).value.trim();
+      if (!text) { flash('Write the update first.'); return; }
+      b.disabled = true;
+      try {
+        await api(`/contexts/${id}/updates`, { method: 'POST', body: { text } });
+        drafts.delete(id);
+        openPanels.delete(id);
+        flash('Update added. Claude Opus is retraining the brief — about a minute.');
+        await refreshAll();
+      } catch (err) { flash(err.message); b.disabled = false; }
+    });
+    for (const b of host.querySelectorAll('[data-delupd]')) b.addEventListener('click', async () => {
+      const [id, updateId] = b.dataset.delupd.split(':');
+      if (!await confirmBox('Remove this update?', 'The brief is retrained without it.', 'Remove')) return;
+      try { await api(`/contexts/${id}/updates/${updateId}`, { method: 'DELETE' }); } catch (err) { flash(err.message); }
+      refreshAll();
+    });
+    for (const b of host.querySelectorAll('[data-saveshare]')) b.addEventListener('click', async () => {
+      const id = b.dataset.saveshare;
+      const teachers = [...host.querySelectorAll('[data-shareto]:checked')].map((x) => x.dataset.shareto);
+      try {
+        await api(`/contexts/${id}/share`, { method: 'PUT', body: { teachers } });
+        openPanels.delete(id);
+        flash(teachers.length ? 'Shared.' : 'No longer shared.');
+        refreshAll();
+      } catch (err) { flash(err.message); }
+    });
+    for (const b of host.querySelectorAll('[data-copy]')) b.addEventListener('click', async () => {
+      try { await api(`/contexts/${b.dataset.copy}/copy`, { method: 'POST' }); flash('Copied into your contexts. You can change the copy.'); refreshAll(); }
+      catch (err) { flash(err.message); }
+    });
     for (const b of host.querySelectorAll('[data-brief]')) b.addEventListener('click', async () => {
       const c = await api(`/contexts/${b.dataset.brief}`);
-      $('text-title').textContent = c.title || c.name;
-      $('text-body').textContent = `${c.brief || '(not built yet)'}\n\n— Example messages —\n${(c.sampleMessages || []).map((m) => `• ${m}`).join('\n')}`;
+      $('text-title').textContent = `${c.title || c.name}${c.mine ? '' : ` — shared by ${c.owner.name}`}`;
+      const ups = (c.updates || []).map((u) => `• ${when(u.at)}: ${u.text}`).join('\n');
+      $('text-body').textContent = `${c.brief || '(not built yet)'}\n\n— Example messages —\n${(c.sampleMessages || []).map((m) => `• ${m}`).join('\n')}${ups ? `\n\n— Updates —\n${ups}` : ''}`;
       $('text-modal').classList.remove('hidden');
     });
     for (const b of host.querySelectorAll('[data-retrain]')) b.addEventListener('click', () => {
       setUpdating(b.dataset.retrain);
-      flash('Drop in any files you want to replace, then click Retrain. Files you leave empty are kept.');
+      flash('Drop in any files you want to replace, then click Retrain. Files you leave empty are kept, and so are your updates.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     for (const b of host.querySelectorAll('[data-delctx]')) b.addEventListener('click', async () => {
-      if (!await confirmBox('Delete this context?', 'Classes using it will fall back to no context. Past activity downloads keep their copy.', 'Delete')) return;
+      const c = contexts.find((x) => x.id === b.dataset.delctx);
+      const shared = c?.sharedWith?.length ? ' It is shared with other teachers — their classes will lose it too.' : '';
+      if (!await confirmBox('Delete this context?', `Classes using it will fall back to no context. Past activity downloads keep their copy.${shared}`, 'Delete')) return;
       await api(`/contexts/${b.dataset.delctx}`, { method: 'DELETE' });
       refreshAll();
     });
@@ -277,7 +368,7 @@
     const select = $('cls-context');
     const current = select.value;
     select.innerHTML = '<option value="">No context (the AI improvises — not recommended)</option>' +
-      contexts.map((c) => `<option value="${c.id}">${esc(c.title || c.name)}${c.status === 'training' ? ' (training…)' : ''}</option>`).join('');
+      contexts.map((c) => `<option value="${c.id}">${esc(c.title || c.name)}${c.mine ? '' : ` — shared by ${esc(c.owner.name)}`}${c.status === 'training' ? ' (training…)' : ''}</option>`).join('');
     select.value = current || contexts[0]?.id || '';
   }
   $('text-close').addEventListener('click', () => $('text-modal').classList.add('hidden'));

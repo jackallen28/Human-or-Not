@@ -202,3 +202,13 @@ th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color:
 .readme table { margin: 14px 0; display: block; overflow-x: auto; }
 .readme td { vertical-align: top; }
 .readme table td img { margin-bottom: 6px; }
+
+/* --------------------------------------------------------- context updates */
+.ctx-panel { margin-top: 12px; padding: 14px; border: 1px solid var(--warn-line); background: var(--warn-bg); border-radius: 12px; }
+.ctx-panel textarea { resize: vertical; min-height: 110px; background: var(--panel); }
+.ctx-panel .persona { background: var(--panel); }
+.updates { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 8px; }
+.update { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; font-size: .88rem; }
+.update .tiny { flex: 0 0 auto; min-width: 86px; }
+.update-text { flex: 1; white-space: pre-wrap; }
+.update button { padding: 2px 7px; font-size: .72rem; }

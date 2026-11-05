@@ -263,6 +263,38 @@ check('teacher 1 does not see it', !(await api('/classes')).data.some((c) => c.i
 const full2 = (await api2(`/classes/${cls2.id}`)).data;
 check('login codes are unique across teachers', !full2.students.some((s) => full.students.some((t) => t.code === s.code)));
 
+// Sharing a context
+check('teacher 1 can share a context with teacher 2', (await api(`/contexts/${ctxId}/share`, { method: 'PUT', body: { teachers: ['2', '1', '9'] } })).data.sharedWith?.join() === '2');
+const shared = (await api2('/contexts')).data;
+check('teacher 2 now sees it, marked as shared by teacher 1', shared.length === 1 && shared[0].id === ctxId && !shared[0].mine && shared[0].owner.name === 'Teacher 1');
+check('teacher 2 can read it', (await api2(`/contexts/${ctxId}`)).data.brief?.includes('sea otter'));
+check('teacher 2 can use it for a class', (await api2(`/classes/${cls2.id}`, { method: 'PUT', body: { contextId: ctxId } })).data.contextId === ctxId);
+check('teacher 2 cannot change it', (await api2(`/contexts/${ctxId}/updates`, { method: 'POST', body: { text: 'sneaky change' } })).status === 404
+  && (await api2(`/contexts/${ctxId}`, { method: 'PUT', body: { name: 'x' } })).status === 404
+  && (await api2(`/contexts/${ctxId}/share`, { method: 'PUT', body: { teachers: ['3'] } })).status === 404
+  && (await api2(`/contexts/${ctxId}`, { method: 'DELETE' })).status === 404);
+const copy = (await api2(`/contexts/${ctxId}/copy`, { method: 'POST' })).data;
+check('teacher 2 can make their own copy', copy.mine && copy.id !== ctxId && /copy/.test(copy.name) && copy.status === 'ready');
+check('teacher 1 does not see teacher 2\'s copy', !(await api('/contexts')).data.some((c) => c.id === copy.id));
+
+// Written updates
+await resetCalls();
+check('an empty update is refused', (await api(`/contexts/${ctxId}/updates`, { method: 'POST', body: { text: ' ' } })).status === 400);
+const upd = await api(`/contexts/${ctxId}/updates`, { method: 'POST', body: { text: 'Day 2: we covered decomposition and the jam sandwich algorithm.' } });
+check('an update is added and retraining starts', upd.status === 200 && upd.data.updates.length === 1 && upd.data.status === 'training');
+check('retraining finishes', await until(async () => (await api(`/contexts/${ctxId}`)).data.status === 'ready'));
+const trainCall = (await getCalls()).find((c) => c.system.includes('prepare briefings'));
+check('Opus is given the update, dated, and told it wins over the files',
+  Boolean(trainCall?.messages[0].content.includes('jam sandwich algorithm') && trainCall.messages[0].content.includes('the update wins') && /\[\d{4}-\d{2}-\d{2}\] Day 2/.test(trainCall.messages[0].content)));
+check('teacher 2 sees the update on the shared context', (await api2('/contexts')).data.find((c) => c.id === ctxId).updates.length === 1);
+const updId = upd.data.updates[0].id;
+check('teacher 2 cannot remove it', (await api2(`/contexts/${ctxId}/updates/${updId}`, { method: 'DELETE' })).status === 404);
+check('teacher 1 can remove it', (await api(`/contexts/${ctxId}/updates/${updId}`, { method: 'DELETE' })).data.updates.length === 0);
+await until(async () => (await api(`/contexts/${ctxId}`)).data.status === 'ready');
+check('unsharing takes it away again', (await api(`/contexts/${ctxId}/share`, { method: 'PUT', body: { teachers: [] } })).data.sharedWith.length === 0
+  && !(await api2('/contexts')).data.some((c) => c.id === ctxId) && (await api2(`/contexts/${ctxId}`)).status === 404);
+await api2(`/classes/${cls2.id}`, { method: 'PUT', body: { contextId: null } });
+
 // Both teachers run an activity at the same time.
 await api('/activities', { method: 'POST', body: { classId: cls.id, name: 'T1 live', durationSec: 60, mode: 'open', blockSize: 1 } });
 const act2 = await api2('/activities', { method: 'POST', body: { classId: cls2.id, name: 'T2 live', durationSec: 60, mode: 'open', blockSize: 1 } });

@@ -10,7 +10,7 @@ import { parseJsonLoose } from '../server/claude.js';
 import { cleanContextFile, contextWordCount, extractSamples } from '../server/analysis.js';
 import { buildSharedPrompt } from '../server/bot.js';
 import { buildPlan, extendPlan, setRoundModels, ensurePlan, MAX_ROUNDS } from '../server/modes.js';
-import { describeActivity } from '../server/analysis.js';
+import { describeActivity, formatUpdates } from '../server/analysis.js';
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -104,6 +104,8 @@ check(`open: never more than ${MAX_ROUNDS} rounds`, po.length === MAX_ROUNDS);
 check('old activities become the four-round mode', ensurePlan({ rounds: [] }).plan.length === 4);
 check('Opus is told open play does not learn', describeActivity({ mode: 'open', plan: po, rounds: [{ number: 1, models: ['haiku'] }] }).setup.includes('did NOT learn'));
 check('Opus is told which models were switched off', describeActivity({ mode: 'learn4', plan: buildPlan('learn4', { finalModels: ['opus'] }), rounds: [] }).setup.includes('Haiku and Sonnet were switched off'));
+
+check('updates are dated and kept in order', formatUpdates([{ text: 'first', at: Date.UTC(2026, 10, 9) }, { text: ' ', at: 1 }, { text: 'second', at: Date.UTC(2026, 10, 10) }]) === '[2026-11-09] first\n\n[2026-11-10] second');
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures ? 1 : 0);
