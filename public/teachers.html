@@ -14,7 +14,13 @@
     <p class="muted small">Each teacher has their own console, password, classes and activities. Choose yours.</p>
     <div class="stack" id="teachers"><p class="muted small">Loading…</p></div>
     <p class="tiny muted" style="margin-top:16px">Students don't need this page: they go to the main address and enter the code on their card.</p>
+    <p class="small" style="margin:14px 0 0"><a href="#about">About / read for more information ↓</a></p>
   </div>
+
+  <section id="about" class="about">
+    <h2 class="about-title">About / read for more information</h2>
+    <article class="card readme" id="readme"><p class="muted small">Loading…</p></article>
+  </section>
 </section>
 <footer class="credit">
   <span>Powered and created by</span>
@@ -22,6 +28,16 @@
 </footer>
 <script>
   const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  fetch('/about.html').then((r) => r.text()).then((html) => {
+    const host = document.getElementById('readme');
+    host.innerHTML = html;
+    // Links within the guide stay on this page; outside links open in a new tab.
+    for (const a of host.querySelectorAll('a[href]')) {
+      if (/^https?:/.test(a.getAttribute('href'))) { a.target = '_blank'; a.rel = 'noopener'; }
+    }
+    for (const img of host.querySelectorAll('img')) img.loading = 'lazy';
+    if (location.hash === '#about') document.getElementById('about').scrollIntoView();
+  }).catch(() => { document.getElementById('readme').innerHTML = '<p class="muted">The guide could not be loaded.</p>'; });
   fetch('/teachers.json').then((r) => r.json()).then((list) => {
     document.getElementById('teachers').innerHTML = list.map((t) => t.ready
       ? `<a class="btn big" style="display:block;text-align:center" href="/teacher/${t.id}">${esc(t.name)} →</a>`

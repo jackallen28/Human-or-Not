@@ -3,3 +3,9 @@ data/
 .env
 *.log
 .DS_Store
+
+# Development notes and AI-assistant session files stay private: never commit them.
+.claude/
+*.jsonl
+transcript*
+*transcript*.md

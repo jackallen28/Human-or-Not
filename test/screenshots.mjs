@@ -146,7 +146,7 @@ for (let round = 1; round <= 4; round++) {
   for (const s of view.students.filter((x) => x.inRound)) {
     const guess = s.partner === 'ai'
       ? (fooledLeft-- > 0 ? 'human' : 'ai')
-      : (round === 1 && s.n === 6 ? 'ai' : 'human');
+      : 'human';
     if (s.n === 1) await phone.click(guess === 'human' ? '#guess-human' : '#guess-ai');
     else if (kids[s.n]) await emit(kids[s.n], 'guess', { guess });
   }

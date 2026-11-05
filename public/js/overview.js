@@ -8,7 +8,7 @@
  * Works inside the teacher console and as a standalone, offline HTML file.
  */
 (function () {
-  const MODEL_COLOURS = { haiku: '#8fd0ff', sonnet: '#7c9cff', opus: '#f5b865' };
+  const MODEL_COLOURS = { haiku: '#3a9bd6', sonnet: '#5a6fe0', opus: '#e0891f' };
   const MODEL_NAMES = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
   const AUTOPLAY_MS = 9000;
 
@@ -73,7 +73,7 @@
     out.push(`<section class="ov-slide">
       <div class="ov-kicker">How often the AI passed as human</div>
       <h2>Students who believed the AI was a classmate</h2>
-      <div class="ov-chart">${rounds.map((r, i) => bar(r.aiFooledRate, r.secret ? '#8fd0ff' : '#ee8a2a', `Round ${r.number}`, Math.min(i * 450, 2700))).join('')}</div>
+      <div class="ov-chart">${rounds.map((r, i) => bar(r.aiFooledRate, r.secret ? '#3a9bd6' : '#ee8a2a', `Round ${r.number}`, Math.min(i * 450, 2700))).join('')}</div>
       <div class="ov-notes">${(s.roundNotes || []).slice(0, count).map((note, i) => `<div class="ov-rise" style="--d:${1800 + i * 300}ms"><b>R${rounds[i]?.number ?? i + 1}</b>${esc(note)}</div>`).join('')}</div>
     </section>`);
 

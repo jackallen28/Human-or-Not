@@ -1,12 +1,12 @@
 /* The animated overview. Self-contained so it also works as a standalone file. */
 .ov-root {
-  --ov-bg: #14110d; --ov-panel: #1e1913; --ov-line: #3b3128; --ov-text: #f4eee6; --ov-muted: #b3a595; --ov-accent: #ee8a2a;
-  position: relative; background: radial-gradient(1000px 520px at 50% -10%, #2c2016 0%, var(--ov-bg) 65%);
+  --ov-bg: #faf5ee; --ov-panel: #ffffff; --ov-line: #e7dacb; --ov-text: #2a2119; --ov-muted: #6f6152; --ov-accent: #b45f0e;
+  position: relative; background: radial-gradient(1000px 520px at 50% -10%, #fde9d2 0%, var(--ov-bg) 65%);
   color: var(--ov-text); border-radius: 16px; overflow: hidden; outline: none; border: 1px solid var(--ov-line);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 .ov-root:fullscreen { border-radius: 0; border: 0; }
-body.ov-standalone { margin: 0; background: #14110d; }
+body.ov-standalone { margin: 0; background: #faf5ee; }
 .ov-standalone .ov-root { border-radius: 0; border: 0; }
 .ov-stage { position: relative; height: 560px; }
 .ov-root:fullscreen .ov-stage, .ov-standalone .ov-stage { height: calc(100vh - 60px); }

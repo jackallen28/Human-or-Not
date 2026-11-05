@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { marked } from 'marked';
 import { Server as SocketServer } from 'socket.io';
 import { openStore, newId } from './store.js';
 import { hasApiKey, models, resolveModels } from './claude.js';
@@ -65,6 +66,21 @@ app.get('/teacher/:id', (req, res, next) => {
   res.sendFile(path.join(publicDir, 'teacher.html'));
 });
 app.get('/teachers.json', (_req, res) => res.json(publicTeachers()));
+
+// The README, as the "About" section under the teacher list. The developer
+// sections at the end are left out; screenshots are served from docs/.
+const aboutHtml = (() => {
+  try {
+    const readme = fs.readFileSync(path.join(here, '..', 'README.md'), 'utf8');
+    const forTeachers = readme.split(/^## Running it on your own computer/m)[0].replace(/\n---\s*$/, '');
+    return marked.parse(forTeachers.replace(/(["(])docs\/screenshots\//g, '$1/docs/screenshots/'));
+  } catch (err) {
+    console.warn('[server] Could not read README.md:', err.message);
+    return '<p>The guide is not available on this server.</p>';
+  }
+})();
+app.get('/about.html', (_req, res) => res.type('html').send(aboutHtml));
+app.use('/docs/screenshots', express.static(path.join(here, '..', 'docs', 'screenshots')));
 // Pinged by the open teacher console so a free Render instance does not fall
 // asleep in the middle of a lesson.
 app.get('/healthz', (_req, res) => res.json({ ok: true, live: [...lives.values()].filter((l) => l.phase !== PHASES.FINISHED).length }));
