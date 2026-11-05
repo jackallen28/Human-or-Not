@@ -31,11 +31,34 @@
   $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) join(); });
   $('join-btn').addEventListener('click', () => join());
 
-  function join(code = $('code').value) {
+  let chosenActivity = sessionStorage.getItem('hon-activity') || '';
+
+  function join(code = $('code').value, activityId = chosenActivity) {
     clearTimeout(retryTimer);
     if (!/^[A-Z]{4}\d{4}$/.test(code)) { $('code-error').textContent = 'Codes are four letters then four numbers.'; return; }
     $('code-error').textContent = '';
-    socket.emit('student:join', { code }, (res) => {
+    $('choose').classList.add('hidden');
+    socket.emit('student:join', { code, activityId }, (res) => {
+      if (res?.code === 'choose') {
+        // Several teachers are running this class at once: the student picks their room.
+        show('code');
+        $('code').value = code;
+        $('choose-list').innerHTML = '';
+        for (const option of res.options) {
+          const b = document.createElement('button');
+          b.className = 'big ghost';
+          b.style.width = '100%';
+          b.textContent = `${option.teacher} — ${option.activity}`;
+          b.addEventListener('click', () => {
+            chosenActivity = option.id;
+            sessionStorage.setItem('hon-activity', option.id);
+            join(code, option.id);
+          });
+          $('choose-list').appendChild(b);
+        }
+        $('choose').classList.remove('hidden');
+        return;
+      }
       if (res?.ok) {
         joined = true;
         myCode = res.code;
@@ -51,7 +74,7 @@
         retryTimer = setTimeout(() => join(code), 4000);
         return;
       }
-      sessionStorage.removeItem('hon-code');
+      sessionStorage.removeItem('hon-code'); sessionStorage.removeItem('hon-activity'); chosenActivity = '';
       show('code');
       $('code-error').textContent = res?.error || 'Could not join.';
     });
@@ -96,7 +119,7 @@
         break;
       case 'finished':
         stopClock();
-        sessionStorage.removeItem('hon-code');
+        sessionStorage.removeItem('hon-code'); sessionStorage.removeItem('hon-activity'); chosenActivity = '';
         joined = false;
         wait('Finished', 'Thanks for playing', 'The activity is over. You can close this page.');
         break;

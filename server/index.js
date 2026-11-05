@@ -11,9 +11,9 @@ import { hasApiKey, models, resolveModels } from './claude.js';
 import { contextWordCount, extractSamples, trainContext } from './analysis.js';
 import { PERSONA_SETS, personaCatalog, personaSet } from './personas.js';
 import { buildCardsPdf, generateCodes } from './pdf.js';
-import { LiveActivity, PHASES } from './activity.js';
+import { LiveActivity, PHASES, MAX_ACTIVITY_STUDENTS, MAX_CLASS_STUDENTS } from './activity.js';
 import { MODES, MAX_ROUNDS, buildPlan, clampBlock, ensurePlan, modeInfo } from './modes.js';
-import { activityZip, overviewData } from './report.js';
+import { activityZip, classZip, overviewData, saveName } from './report.js';
 import { createZip } from './zip.js';
 import { TEACHERS, findTeacher, ownerOf, publicTeachers, teacherWarnings } from './teachers.js';
 
@@ -134,6 +134,8 @@ api.get('/meta', wrap(async (req, res) => {
     models: models(),
     personaSets: personaCatalog(),
     modes: Object.values(MODES),
+    maxStudentsPerClass: MAX_CLASS_STUDENTS,
+    maxStudentsPerActivity: MAX_ACTIVITY_STUDENTS,
     maxRounds: MAX_ROUNDS,
     storage: { kind: store.kind, description: store.describe(), persistent: !onFreeRenderDisk },
     joinUrl: joinUrl(req).replace(/^https?:\/\//, ''),
@@ -325,11 +327,23 @@ api.delete('/contexts/:id', wrap(async (req, res) => {
 
 // ------------------------------------------------------------------ classes
 
-const classSummary = (c) => ({
-  id: c.id, name: c.name, size: c.students.length, personaSet: c.personaSet,
-  personaSetLabel: personaSet(c.personaSet).label, personas: c.personas, contextId: c.contextId,
-  createdAt: c.createdAt,
-});
+const classSummary = (req) => (c) => {
+  const mine = ownerOf(c) === req.teacher.id;
+  return {
+    id: c.id, name: c.name, size: c.students.length, personaSet: c.personaSet,
+    personaSetLabel: personaSet(c.personaSet).label, personas: c.personas, contextId: c.contextId,
+    createdAt: c.createdAt, mine, owner: { id: ownerOf(c), name: teacherName(ownerOf(c)) },
+    sharedWith: mine ? (c.sharedWith || []) : [],
+  };
+};
+
+/** A class this teacher may run activities with: their own, or one shared with them. */
+async function usableClass(req, id) {
+  const cls = id ? await store.get('classes', id) : null;
+  return canUse(req, cls) ? cls : null;
+}
+/** Is any teacher running an activity with this class right now? */
+const classInUse = (id) => [...lives.values()].some((l) => l.cls.id === id && l.phase !== PHASES.FINISHED);
 
 async function allCodes() {
   return new Set((await store.list('classes')).flatMap((c) => c.students.map((s) => s.code)));
@@ -343,12 +357,13 @@ function readPersonas(body) {
 }
 
 api.get('/classes', wrap(async (req, res) => {
-  const all = mineOnly(req, await store.list('classes'));
-  res.json(all.sort((a, b) => b.createdAt - a.createdAt).map(classSummary));
+  const all = (await store.list('classes')).filter((c) => canUse(req, c));
+  all.sort((a, b) => (ownerOf(b) === req.teacher.id) - (ownerOf(a) === req.teacher.id) || b.createdAt - a.createdAt);
+  res.json(all.map(classSummary(req)));
 }));
 
 api.get('/classes/:id', wrap(async (req, res) => {
-  const cls = await owned(req, 'classes', req.params.id);
+  const cls = await usableClass(req, req.params.id);
   if (!cls) return res.status(404).json({ error: 'Not found.' });
   res.json(cls);
 }));
@@ -357,7 +372,7 @@ api.post('/classes', wrap(async (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 80);
   const count = Math.floor(Number(req.body?.count));
   if (!name) return res.status(400).json({ error: 'Give the class a name.' });
-  if (!(count >= 1 && count <= 60)) return res.status(400).json({ error: 'Between 1 and 60 students.' });
+  if (!(count >= 1 && count <= MAX_CLASS_STUDENTS)) return res.status(400).json({ error: `Between 1 and ${MAX_CLASS_STUDENTS} students.` });
   const contextId = await usable(req, req.body?.contextId) ? req.body.contextId : null;
   const codes = generateCodes(count, await allCodes());
   const cls = {
@@ -366,23 +381,24 @@ api.post('/classes', wrap(async (req, res) => {
     name,
     ...readPersonas(req.body),
     contextId,
+    sharedWith: [],
     students: codes.map((code, i) => ({ n: i + 1, label: `Student ${i + 1}`, code })),
     createdAt: Date.now(),
   };
   await store.put('classes', cls.id, cls);
-  res.json(classSummary(cls));
+  res.json(classSummary(req)(cls));
 }));
 
 api.put('/classes/:id', wrap(async (req, res) => {
   const cls = await owned(req, 'classes', req.params.id);
-  if (!cls) return res.status(404).json({ error: 'Not found.' });
+  if (!cls) return res.status(404).json({ error: 'Only the teacher who made this class can change it.' });
   if (req.body?.name) cls.name = String(req.body.name).trim().slice(0, 80);
   if ('contextId' in (req.body || {})) {
     cls.contextId = await usable(req, req.body.contextId) ? req.body.contextId : null;
   }
   if (req.body?.personaSet) Object.assign(cls, readPersonas(req.body));
   const count = Math.floor(Number(req.body?.count));
-  if (count > cls.students.length && count <= 60) {
+  if (count > cls.students.length && count <= MAX_CLASS_STUDENTS) {
     const codes = generateCodes(count - cls.students.length, await allCodes());
     codes.forEach((code) => {
       const n = cls.students.length + 1;
@@ -390,19 +406,50 @@ api.put('/classes/:id', wrap(async (req, res) => {
     });
   }
   await store.put('classes', cls.id, cls);
-  res.json(classSummary(cls));
+  res.json(classSummary(req)(cls));
+}));
+
+// Share a class: other teachers can run activities with it (and print its
+// cards), each with up to 50 of its students at a time.
+api.put('/classes/:id/share', wrap(async (req, res) => {
+  const cls = await owned(req, 'classes', req.params.id);
+  if (!cls) return res.status(404).json({ error: 'Only the teacher who made this class can share it.' });
+  const valid = new Set(TEACHERS.map((t) => t.id).filter((id) => id !== req.teacher.id));
+  cls.sharedWith = [...new Set((Array.isArray(req.body?.teachers) ? req.body.teachers : []).map(String))].filter((id) => valid.has(id));
+  await store.put('classes', cls.id, cls);
+  res.json(classSummary(req)(cls));
+}));
+
+// Every activity run with this class, one folder each. The class's owner gets
+// every teacher's; a teacher it is shared with gets their own.
+api.get('/classes/:id/activities.zip', wrap(async (req, res) => {
+  const cls = await usableClass(req, req.params.id);
+  if (!cls) return res.status(404).json({ error: 'Not found.' });
+  const isOwner = ownerOf(cls) === req.teacher.id;
+  const records = (await store.list('activities'))
+    .filter((a) => a.classId === cls.id && (isOwner || ownerOf(a) === req.teacher.id))
+    .sort((a, b) => a.createdAt - b.createdAt);
+  if (!records.length) return res.status(404).json({ error: 'No activities have been run with this class yet.' });
+  const entries = [];
+  for (const record of records) {
+    const context = (record.contextId && await store.get('contexts', record.contextId)) || (record.contextBrief ? { brief: record.contextBrief } : null);
+    entries.push({ record, cls, context });
+  }
+  const { name, buffer } = classZip({ cls, entries });
+  res.setHeader('content-type', 'application/zip');
+  res.setHeader('content-disposition', `attachment; filename="${name}"`);
+  res.send(buffer);
 }));
 
 api.delete('/classes/:id', wrap(async (req, res) => {
-  if (!await owned(req, 'classes', req.params.id)) return res.status(404).json({ error: 'Not found.' });
-  const live = liveFor(req.teacher.id);
-  if (live?.cls.id === req.params.id && live.phase !== PHASES.FINISHED) return res.status(409).json({ error: 'That class is in an activity right now.' });
+  if (!await owned(req, 'classes', req.params.id)) return res.status(404).json({ error: 'Only the teacher who made this class can delete it.' });
+  if (classInUse(req.params.id)) return res.status(409).json({ error: 'That class is in an activity right now.' });
   await store.remove('classes', req.params.id);
   res.json({ ok: true });
 }));
 
 api.get('/classes/:id/cards.pdf', wrap(async (req, res) => {
-  const cls = await owned(req, 'classes', req.params.id);
+  const cls = await usableClass(req, req.params.id);
   if (!cls) return res.status(404).json({ error: 'Not found.' });
   const pdf = buildCardsPdf({ title: cls.name, joinUrl: joinUrl(req).replace(/^https?:\/\//, ''), cards: cls.students });
   res.setHeader('content-type', 'application/pdf');
@@ -413,7 +460,7 @@ api.get('/classes/:id/cards.pdf', wrap(async (req, res) => {
 // --------------------------------------------------------------- activities
 
 const activitySummary = (a) => ({
-  id: a.id, name: a.name, className: a.className, contextName: a.contextName, status: a.status,
+  id: a.id, name: a.name, classId: a.classId, className: a.className, saveName: saveName(a), contextName: a.contextName, status: a.status,
   rounds: a.rounds.length, planned: ensurePlan(a).plan.length, mode: modeInfo(a.mode).short,
   hasOverview: Boolean(a.overview), createdAt: a.createdAt, finishedAt: a.finishedAt || null,
   fooled: a.rounds.map((r) => r.stats?.aiFooledRate ?? null),
@@ -429,11 +476,12 @@ api.post('/activities', wrap(async (req, res) => {
   if (running && running.phase !== PHASES.FINISHED) {
     return res.status(409).json({ error: `"${running.record.name}" is still running. Finish it first.` });
   }
-  const cls = await owned(req, 'classes', req.body?.classId);
+  const cls = await usableClass(req, req.body?.classId);
   if (!cls) return res.status(400).json({ error: 'Choose a class.' });
   const name = String(req.body?.name || '').trim().slice(0, 80);
   if (!name) return res.status(400).json({ error: 'Name the activity, e.g. "Preservice teachers, week 6".' });
-  const context = await usable(req, cls.contextId);
+  // The class's own context, chosen by the class's owner, also when the class is shared.
+  const context = cls.contextId ? await store.get('contexts', cls.contextId) : null;
   const mode = MODES[req.body?.mode] ? req.body.mode : 'learn4';
   const record = {
     id: newId('act'),
@@ -569,13 +617,18 @@ function startLive(teacherId, activity) {
   queueTeachers(teacherId);
 }
 
-/** The running activity whose class holds this login code. */
-function liveForCode(rawCode) {
+/**
+ * The running activities this login code could join. A class shared between
+ * teachers can be in several at once; a student who has already joined one
+ * always goes back to it, and full activities are skipped.
+ */
+function livesForCode(rawCode) {
   const code = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  for (const live of lives.values()) {
-    if (live.phase !== PHASES.FINISHED && live.codes.has(code)) return live;
-  }
-  return null;
+  const running = [...lives.values()].filter((l) => l.phase !== PHASES.FINISHED && l.codes.has(code));
+  const already = running.find((l) => l.hasJoined(code));
+  if (already) return { lives: [already], full: false };
+  const open = running.filter((l) => l.hasRoom());
+  return { lives: open, full: running.length > 0 && open.length === 0 };
 }
 
 io.on('connection', (socket) => {
@@ -584,12 +637,26 @@ io.on('connection', (socket) => {
   let studentLive = null;
 
   socket.on('student:join', (payload, ack) => {
-    const live = liveForCode(payload?.code);
-    if (!live) {
+    const found = livesForCode(payload?.code);
+    if (found.full) {
+      return ack?.({ ok: false, code: 'full', error: `Every activity for this class is full (${MAX_ACTIVITY_STUDENTS} students each). Ask your teacher.` });
+    }
+    if (!found.lives.length) {
       const anyRunning = [...lives.values()].some((l) => l.phase !== PHASES.FINISHED);
       return ack?.(anyRunning
         ? { ok: false, error: 'That code is not part of an activity that is running. Check it with your teacher.' }
         : { ok: false, code: 'not_started', error: 'Your teacher has not started an activity yet.' });
+    }
+    // Several teachers are running this class: the student says whose room they are in.
+    let live = found.lives[0];
+    if (found.lives.length > 1) {
+      live = found.lives.find((l) => l.record.id === payload?.activityId);
+      if (!live) {
+        return ack?.({
+          ok: false, code: 'choose', error: 'Which teacher are you with?',
+          options: found.lives.map((l) => ({ id: l.record.id, teacher: l.record.teacherName || teacherName(ownerOf(l.record)), activity: l.record.name })),
+        });
+      }
     }
     if (studentLive && studentLive !== live) studentLive.disconnect(socket.id);
     const result = live.join(payload?.code, socket.id);

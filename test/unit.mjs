@@ -11,6 +11,8 @@ import { cleanContextFile, contextWordCount, extractSamples } from '../server/an
 import { buildSharedPrompt } from '../server/bot.js';
 import { buildPlan, extendPlan, setRoundModels, ensurePlan, MAX_ROUNDS } from '../server/modes.js';
 import { describeActivity, formatUpdates } from '../server/analysis.js';
+import { LiveActivity, MAX_ACTIVITY_STUDENTS, MAX_CLASS_STUDENTS } from '../server/activity.js';
+import { saveName, stamp } from '../server/report.js';
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -106,6 +108,19 @@ check('Opus is told open play does not learn', describeActivity({ mode: 'open', 
 check('Opus is told which models were switched off', describeActivity({ mode: 'learn4', plan: buildPlan('learn4', { finalModels: ['opus'] }), rounds: [] }).setup.includes('Haiku and Sonnet were switched off'));
 
 check('updates are dated and kept in order', formatUpdates([{ text: 'first', at: Date.UTC(2026, 10, 9) }, { text: ' ', at: 1 }, { text: 'second', at: Date.UTC(2026, 10, 10) }]) === '[2026-11-09] first\n\n[2026-11-10] second');
+
+console.log('\n--- class and activity sizes ---');
+check('a class holds up to 100, an activity up to 50', MAX_CLASS_STUDENTS === 100 && MAX_ACTIVITY_STUDENTS === 50);
+const big = { id: 'cls_big', name: 'Cohort', students: Array.from({ length: 60 }, (_, i) => ({ n: i + 1, label: `Student ${i + 1}`, code: `ABCD${String(1000 + i)}` })) };
+const capped = new LiveActivity({ record: { id: 'act_x', mode: 'open', rounds: [], personaSet: 'preservice' }, cls: big, context: null, store: { put: async () => {} } });
+const joins = big.students.map((st) => capped.join(st.code, `sock${st.n}`));
+check('the first 50 students join', joins.slice(0, 50).every((r) => r.ok));
+check('the 51st is told the activity is full', joins[50].ok === false && joins[50].code === 'full');
+check('someone already in can always rejoin', capped.join(big.students[3].code, 'new-socket').ok && !capped.hasRoom() && capped.hasJoined(big.students[3].code));
+
+console.log('\n--- save names ---');
+check('times are local (Melbourne), not UTC', stamp(Date.UTC(2026, 10, 8, 22, 30)) === '2026-11-09_09-30');
+check('teacher_date_time_class', saveName({ teacherId: '3', createdAt: Date.UTC(2026, 10, 8, 22, 30), className: 'TCHE2615 Tutorial #2' }) === 'teacher-3_2026-11-09_09-30_TCHE2615-Tutorial-2');
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures ? 1 : 0);

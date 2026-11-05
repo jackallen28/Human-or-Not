@@ -212,3 +212,9 @@ th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color:
 .update .tiny { flex: 0 0 auto; min-width: 86px; }
 .update-text { flex: 1; white-space: pre-wrap; }
 .update button { padding: 2px 7px; font-size: .72rem; }
+
+/* ------------------------------------------------- activities, by class */
+.act-group + .act-group { margin-top: 22px; }
+.act-group-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 6px; border-bottom: 2px solid var(--warn-line); }
+.act-group-head h3 { margin: 0; }
+.act-group-head button { margin-left: auto; }

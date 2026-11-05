@@ -174,6 +174,13 @@ them can see the others'. All three can run an activity **at the same time**: st
 just type the code on their card, and it takes them to their own teacher's activity.
 Backups are per teacher too.
 
+**One big class, several teachers.** Make the class once (say all 100 students of a course),
+print the cards, and **Share** it with the other teachers. Each teacher then starts their own
+activity with it, up to 50 students each, at the same time. A student whose code is in more
+than one running activity is asked *"Which teacher are you with?"*, and goes straight back to
+the same room if they reconnect. Every activity is saved under the class: the class's owner
+can download all of them as one ZIP (**⬇ All activities**), and each other teacher gets their own.
+
 **Sharing a context.** A teacher can **Share** a context with any of the others, which suits
 teachers running parallel classes of the same course. The others can use it for their classes,
 read it, and **Make my own copy** to change. Only the owner can edit, update or delete it. What
@@ -222,7 +229,8 @@ the AI pretends to be:
   enthusiast, the anxious perfectionist, the laid-back one, the critical sceptic, the
   tech-savvy early adopter.
 
-Untick any persona you do not want. The console downloads a **PDF of login cards** —
+Untick any persona you do not want. A class can have **up to 100 students**; each activity
+takes **up to 50** at a time. The console downloads a **PDF of login cards** —
 *Student 1 · BAKE2739* — ten to a page, ready to print and cut. Codes avoid I, O, 0 and 1
 so they can be read aloud.
 
@@ -278,7 +286,10 @@ Then a chat window with a countdown, two buttons to guess, and whether they were
 ## The download
 
 **Download all activity data (ZIP)** — from the live view or any time later under
-*Activities* — gives you:
+*Activities*, where activities are grouped by class. Each download is named
+**`teacher-1_2026-11-09_09-30_TCHE2615-Cohort`**: who ran it, when it started (local time),
+and which class. **⬇ All for this class** puts every activity of a class in one ZIP, one
+folder each. Each activity's download gives you:
 
 | | |
 |---|---|

@@ -328,9 +328,54 @@ const backup2 = (await api2('/backup')).data;
 check('a backup holds only that teacher\'s things', backup2.classes.length === 1 && backup2.classes[0].id === cls2.id && backup2.activities.length === 1);
 await emit(teacher2, 'live:finish', {});
 await cmd('live:finish');
-teacher2.close();
 for (const k of kids2) k.sock.close();
 
+console.log('\n--- 11. one big class, several teachers ---');
+check('a class can have up to 100 students', (await api('/classes', { method: 'POST', body: { name: 'Too big', count: 101 } })).status === 400);
+const cohort = (await api('/classes', { method: 'POST', body: { name: 'TCHE2615 Cohort', count: 100, personaSet: 'preservice', contextId: ctxId } })).data;
+check('a 100-student class is created', cohort.size === 100 && cohort.mine);
+const cohortFull = (await api(`/classes/${cohort.id}`)).data;
+const cards100 = await api(`/classes/${cohort.id}/cards.pdf`);
+check('its login cards cover all 100', cards100.data.toString('latin1').includes(cohortFull.students[99].code));
+check('teacher 2 cannot use it before it is shared', (await api2(`/classes/${cohort.id}`)).status === 404);
+check('teacher 1 shares it with teacher 2', (await api(`/classes/${cohort.id}/share`, { method: 'PUT', body: { teachers: ['2'] } })).data.sharedWith.join() === '2');
+const seen2 = (await api2('/classes')).data.find((c) => c.id === cohort.id);
+check('teacher 2 sees it, shared by teacher 1', seen2 && !seen2.mine && seen2.owner.name === 'Teacher 1');
+check('teacher 2 can print its cards', (await api2(`/classes/${cohort.id}/cards.pdf`)).status === 200);
+check('teacher 2 cannot change, share or delete it', (await api2(`/classes/${cohort.id}`, { method: 'PUT', body: { name: 'x' } })).status === 404
+  && (await api2(`/classes/${cohort.id}/share`, { method: 'PUT', body: { teachers: ['3'] } })).status === 404
+  && (await api2(`/classes/${cohort.id}`, { method: 'DELETE' })).status === 404);
+
+const a1 = (await api('/activities', { method: 'POST', body: { classId: cohort.id, name: 'Room A', mode: 'open', blockSize: 1 } })).data;
+const a2 = (await api2('/activities', { method: 'POST', body: { classId: cohort.id, name: 'Room B', mode: 'open', blockSize: 1 } })).data;
+check('both teachers run the same class at once', a1.status === 'live' && a2.status === 'live');
+check('activities are saved as teacher_date_time_class', /^teacher-1_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}_TCHE2615-Cohort$/.test(a1.saveName) && /^teacher-2_.*_TCHE2615-Cohort$/.test(a2.saveName));
+check('teacher 2\'s activity uses the class\'s context', Boolean((await api2('/activities')).data.find((a) => a.id === a2.id)?.contextName));
+check('the class cannot be deleted while in use', (await api(`/classes/${cohort.id}`, { method: 'DELETE' })).status === 409);
+
+const pupil = io(URL);
+await new Promise((r) => pupil.on('connect', r));
+const code1 = cohortFull.students[0].code;
+const ask = await emit(pupil, 'student:join', { code: code1 });
+check('a student in both is asked which teacher', ask.code === 'choose' && ask.options.length === 2 && ask.options.some((o) => o.teacher === 'Ms Second' && o.activity === 'Room B'));
+const chosen = await emit(pupil, 'student:join', { code: code1, activityId: a2.id });
+check('they join the room they chose', chosen.ok && chosen.activity === 'Room B');
+const again = await emit(pupil, 'student:join', { code: code1 });
+check('coming back, they go straight to the same room', again.ok && again.activity === 'Room B');
+pupil.close();
+await cmd('live:finish');
+await emit(teacher2, 'live:finish', {});
+
+const ownerZip = await api(`/classes/${cohort.id}/activities.zip`);
+const ownerText = ownerZip.data.toString('latin1');
+check('the class owner downloads every teacher\'s activities, one folder each', ownerZip.status === 200
+  && ownerText.includes(`TCHE2615-Cohort/${a1.saveName}/report.html`) && ownerText.includes(`TCHE2615-Cohort/${a2.saveName}/report.html`));
+const otherZip = (await api2(`/classes/${cohort.id}/activities.zip`)).data.toString('latin1');
+check('a teacher it is shared with downloads only their own', otherZip.includes(a2.saveName) && !otherZip.includes(a1.saveName));
+const oneZip = await fetch(`${URL}/api/activities/${a1.id}/zip`, { headers: { 'x-teacher-code': CODE } });
+check('a single activity downloads under its save name', (oneZip.headers.get('content-disposition') || '').includes(`${a1.saveName}.zip`));
+
+teacher2.close();
 teacher.close();
 for (const k of kids) k.sock.close();
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);

@@ -24,6 +24,10 @@ import { ensurePlan, extendPlan, modeInfo, setRoundModels, MAX_ROUNDS } from './
  * progress.
  */
 
+/** At most this many students in one activity; a class can hold up to 100. */
+export const MAX_ACTIVITY_STUDENTS = Math.max(2, Number(process.env.MAX_STUDENTS_PER_ACTIVITY) || 50);
+export const MAX_CLASS_STUDENTS = 100;
+
 export const PHASES = {
   LOBBY: 'lobby',       // students joining, waiting for a round
   ACTIVE: 'active',     // chatting, clock running
@@ -105,6 +109,9 @@ export class LiveActivity extends EventEmitter {
     const entry = this.codes.get(code);
     if (!entry) return { ok: false, error: 'That code is not part of this class.' };
     const existing = this.students.get(entry.n);
+    if (!existing && this.students.size >= MAX_ACTIVITY_STUDENTS) {
+      return { ok: false, code: 'full', error: `This activity is full (${MAX_ACTIVITY_STUDENTS} students). Check with your teacher which room you are in.` };
+    }
     const student = existing || { n: entry.n, label: entry.label, code, joinedAt: Date.now() };
     student.socketId = socketId;
     student.connected = true;
@@ -112,6 +119,10 @@ export class LiveActivity extends EventEmitter {
     this.emit('roster');
     return { ok: true, n: entry.n, label: entry.label, code };
   }
+
+  /** Has this code already joined (so it can always come back), or is there room for it? */
+  hasJoined(code) { const entry = this.codes.get(code); return Boolean(entry && this.students.has(entry.n)); }
+  hasRoom() { return this.students.size < MAX_ACTIVITY_STUDENTS; }
 
   disconnect(socketId) {
     for (const s of this.students.values()) {
@@ -574,6 +585,8 @@ export class LiveActivity extends EventEmitter {
       endsAt: this.endsAt,
       durationSec: this.record.durationSec,
       classSize: this.cls.students.length,
+      maxStudents: MAX_ACTIVITY_STUDENTS,
+      teacherName: this.record.teacherName || null,
       students,
       round: round ? {
         number: round.number,

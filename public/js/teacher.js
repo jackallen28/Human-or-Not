@@ -418,24 +418,60 @@
     }
   });
 
+  const openClassShare = new Set();
+
   function renderClasses() {
     const host = $('cls-list');
+    const others = (meta?.teachers || []).filter((t) => t.id !== meta.teacher.id);
     host.innerHTML = classes.length ? classes.map((c) => {
       const ctx = contexts.find((x) => x.id === c.contextId);
+      const sharedNames = others.filter((t) => c.sharedWith.includes(t.id)).map((t) => t.name);
+      const ctxLabel = ctx ? esc(ctx.title || ctx.name) : c.contextId ? 'set by the class owner' : '<span style="color:var(--warn)">none</span>';
       return `<div class="list-item">
-        <div style="flex:1 1 320px"><div class="title">${esc(c.name)}</div>
-          <div class="small muted">${c.size} students · ${esc(c.personaSetLabel)} · ${c.personas.length} personas · context: ${ctx ? esc(ctx.title || ctx.name) : '<span style="color:var(--warn)">none</span>'}</div></div>
+        <div style="flex:1 1 320px"><div class="title">${esc(c.name)}
+            ${c.mine ? (sharedNames.length ? `<span class="pill">Shared with ${esc(sharedNames.join(', '))}</span>` : '') : `<span class="pill ai">Shared by ${esc(c.owner.name)}</span>`}</div>
+          <div class="small muted">${c.size} students · ${esc(c.personaSetLabel)} · ${c.personas.length} personas · context: ${ctxLabel}</div>
+          ${c.mine && openClassShare.has(c.id) ? `<div class="ctx-panel">
+            <label>Share this class with</label>
+            <div class="row" style="gap:8px">${others.map((t) => `<label class="persona ${c.sharedWith.includes(t.id) ? '' : 'off'}" style="flex:0 0 auto">
+              <input type="checkbox" data-clsshareto="${t.id}" ${c.sharedWith.includes(t.id) ? 'checked' : ''}>
+              <div class="name">${esc(t.name)}${t.ready ? '' : ' <span class="tiny muted">(not set up)</span>'}</div></label>`).join('') || '<span class="small muted">There are no other teachers on this server.</span>'}</div>
+            <div class="row" style="margin-top:8px;align-items:center">
+              <div class="shrink"><button class="small" data-saveclsshare="${c.id}">Save sharing</button></div>
+              <div class="shrink"><button class="ghost small" data-clsshare="${c.id}">Cancel</button></div>
+              <div class="tiny muted">They can print its cards and run their own activities with it, up to ${meta.maxStudentsPerActivity} students each, at the same time as you. Each activity is saved under this class.</div>
+            </div></div>` : ''}
+        </div>
         <div class="shrink row">
           <button class="small" data-cards="${c.id}">⬇ Login cards (PDF)</button>
-          <select class="small" data-ctx="${c.id}" style="width:auto;padding:6px 8px;font-size:.82rem">
+          ${c.mine ? `<select class="small" data-ctx="${c.id}" style="width:auto;padding:6px 8px;font-size:.82rem">
             <option value="">No context</option>${contexts.map((x) => `<option value="${x.id}" ${x.id === c.contextId ? 'selected' : ''}>${esc(x.title || x.name)}</option>`).join('')}
           </select>
           <button class="ghost small" data-add="${c.id}">+ Students</button>
-          <button class="danger small" data-delcls="${c.id}">Delete</button>
+          <button class="ghost small" data-clsshare="${c.id}">Share</button>` : ''}
+          <button class="ghost small" data-clszip="${c.id}">⬇ ${c.mine ? 'All activities' : 'My activities'} (ZIP)</button>
+          ${c.mine ? `<button class="danger small" data-delcls="${c.id}">Delete</button>` : ''}
         </div></div>`;
     }).join('') : '<p class="muted small">None yet.</p>';
 
     for (const b of host.querySelectorAll('[data-cards]')) b.addEventListener('click', () => download(`/classes/${b.dataset.cards}/cards.pdf`, 'login-cards.pdf'));
+    for (const b of host.querySelectorAll('[data-clszip]')) b.addEventListener('click', () => download(`/classes/${b.dataset.clszip}/activities.zip`, 'activities.zip'));
+    for (const b of host.querySelectorAll('[data-clsshare]')) b.addEventListener('click', () => {
+      const id = b.dataset.clsshare;
+      if (openClassShare.has(id)) openClassShare.delete(id); else openClassShare.add(id);
+      renderClasses();
+    });
+    for (const box of host.querySelectorAll('[data-clsshareto]')) box.addEventListener('change', () => box.closest('.persona').classList.toggle('off', !box.checked));
+    for (const b of host.querySelectorAll('[data-saveclsshare]')) b.addEventListener('click', async () => {
+      const id = b.dataset.saveclsshare;
+      const teachers = [...host.querySelectorAll('[data-clsshareto]:checked')].map((x) => x.dataset.clsshareto);
+      try {
+        await api(`/classes/${id}/share`, { method: 'PUT', body: { teachers } });
+        openClassShare.delete(id);
+        flash(teachers.length ? 'Class shared.' : 'Class no longer shared.');
+        refreshAll();
+      } catch (err) { flash(err.message); }
+    });
     for (const s of host.querySelectorAll('[data-ctx]')) s.addEventListener('change', async () => {
       await api(`/classes/${s.dataset.ctx}`, { method: 'PUT', body: { contextId: s.value || null } });
       flash('Context updated for that class.');
@@ -443,14 +479,19 @@
     });
     for (const b of host.querySelectorAll('[data-add]')) b.addEventListener('click', async () => {
       const c = classes.find((x) => x.id === b.dataset.add);
-      const more = Number(prompt(`How many students should ${c.name} have in total? (currently ${c.size})`, String(c.size + 1)));
+      const max = meta.maxStudentsPerClass;
+      if (c.size >= max) { flash(`${c.name} already has the most a class can hold (${max}).`); return; }
+      const more = Number(prompt(`How many students should ${c.name} have in total? (currently ${c.size}, up to ${max})`, String(Math.min(c.size + 1, max))));
       if (!(more > c.size)) return;
+      if (more > max) { flash(`A class can hold up to ${max} students.`); return; }
       await api(`/classes/${c.id}`, { method: 'PUT', body: { count: more } });
       flash('Added. Download the login cards again to get the new codes.');
       refreshAll();
     });
     for (const b of host.querySelectorAll('[data-delcls]')) b.addEventListener('click', async () => {
-      if (!await confirmBox('Delete this class?', 'Its login codes stop working. Past activities stay downloadable.', 'Delete')) return;
+      const c = classes.find((x) => x.id === b.dataset.delcls);
+      const shared = c?.sharedWith?.length ? ' It is shared with other teachers — they lose it too.' : '';
+      if (!await confirmBox('Delete this class?', `Its login codes stop working. Past activities stay downloadable.${shared}`, 'Delete')) return;
       try { await api(`/classes/${b.dataset.delcls}`, { method: 'DELETE' }); } catch (err) { flash(err.message); }
       refreshAll();
     });
@@ -458,7 +499,7 @@
     const select = $('act-class');
     const current = select.value;
     select.innerHTML = classes.length
-      ? classes.map((c) => `<option value="${c.id}">${esc(c.name)} (${c.size})</option>`).join('')
+      ? classes.map((c) => `<option value="${c.id}">${esc(c.name)} (${c.size})${c.mine ? '' : ` — shared by ${esc(c.owner.name)}`}</option>`).join('')
       : '<option value="">Create a class first</option>';
     if (current) select.value = current;
   }
@@ -544,17 +585,31 @@
 
   function renderActivities() {
     const host = $('act-list');
-    host.innerHTML = activities.length ? activities.map((a) => `
+    // Saved per activity, grouped under the class it was run with.
+    const groups = new Map();
+    for (const a of activities) {
+      if (!groups.has(a.classId)) groups.set(a.classId, { name: a.className, items: [] });
+      groups.get(a.classId).items.push(a);
+    }
+    const item = (a) => `
       <div class="list-item">
         <div style="flex:1 1 320px"><div class="title">${esc(a.name)} <span class="pill ${a.status === 'finished' ? 'human' : a.status === 'live' ? 'on' : 'warn'}">${esc(a.status)}</span></div>
-          <div class="small muted">${esc(a.className)} · ${new Date(a.createdAt).toLocaleString()} · ${esc(a.mode)} · ${a.rounds}/${a.planned} rounds
-            ${a.fooled.length ? ` · AI passed as human: ${a.fooled.map((f, i) => `R${i + 1} ${pct(f)}`).join(', ')}` : ''}</div></div>
+          <div class="small muted">${new Date(a.createdAt).toLocaleString()} · ${esc(a.mode)} · ${a.rounds}/${a.planned} rounds
+            ${a.fooled.length ? ` · AI passed as human: ${a.fooled.map((f, i) => `R${i + 1} ${pct(f)}`).join(', ')}` : ''}</div>
+          <div class="tiny muted"><code>${esc(a.saveName)}</code></div></div>
         <div class="shrink row">
           ${a.status === 'live' ? '<button class="small" data-golive="1">Open live view</button>' : ''}
           ${a.hasOverview ? `<button class="ghost small" data-ov="${a.id}">▶ Overview</button>` : ''}
           ${a.rounds ? `<button class="small" data-zip="${a.id}">⬇ ZIP</button>` : ''}
           ${a.status !== 'live' ? `<button class="danger small" data-delact="${a.id}">Delete</button>` : ''}
-        </div></div>`).join('') : '<p class="muted small">None yet.</p>';
+        </div></div>`;
+    host.innerHTML = activities.length ? [...groups.entries()].map(([classId, g]) => `
+      <div class="act-group">
+        <div class="act-group-head"><h3>${esc(g.name)}</h3><span class="small muted">${g.items.length} activit${g.items.length === 1 ? 'y' : 'ies'}</span>
+          ${classes.some((c) => c.id === classId) ? `<button class="ghost small" data-clszip="${classId}">⬇ All for this class (ZIP)</button>` : ''}</div>
+        ${g.items.map(item).join('')}
+      </div>`).join('') : '<p class="muted small">None yet.</p>';
+    for (const b of host.querySelectorAll('[data-clszip]')) b.addEventListener('click', () => download(`/classes/${b.dataset.clszip}/activities.zip`, 'activities.zip'));
     for (const b of host.querySelectorAll('[data-golive]')) b.addEventListener('click', () => showTab('live'));
     for (const b of host.querySelectorAll('[data-zip]')) b.addEventListener('click', () => download(`/activities/${b.dataset.zip}/zip`, 'activity.zip'));
     for (const b of host.querySelectorAll('[data-ov]')) b.addEventListener('click', async () => {
@@ -644,7 +699,9 @@
     const students = live.students;
     if (live.phase === 'lobby') {
       $('lobby-count').textContent = students.filter((s) => s.connected).length;
-      $('lobby-of').textContent = live.classSize;
+      $('lobby-of').textContent = Math.min(live.classSize, live.maxStudents);
+      $('lobby-cap').textContent = live.classSize > live.maxStudents
+        ? `This class has ${live.classSize} students; up to ${live.maxStudents} can join this activity. Other teachers can run the rest at the same time.` : '';
       $('lobby-chips').innerHTML = students.map((s) => `<div class="chip ${s.connected ? '' : 'off'}">${esc(s.label)}</div>`).join('');
       $('btn-start-1').disabled = !students.some((s) => s.connected);
       const first = nextPlan();

@@ -220,8 +220,32 @@ export function overviewData(record) {
 
 // --------------------------------------------------------------------- zip
 
-export function activityZip({ record, cls, context }) {
-  const base = `human-or-not_${slug(record.name)}_${new Date(record.createdAt).toISOString().slice(0, 10)}`;
+// The local time on the educator's side, not the server's (Render runs on UTC).
+const TIME_ZONE = process.env.TIME_ZONE || 'Australia/Melbourne';
+const fileSafe = (v, fallback) => String(v || '').normalize('NFKD').replace(/[^\w\s-]+/g, '').trim().replace(/[\s_]+/g, '-').replace(/-+/g, '-').slice(0, 50) || fallback;
+
+/** "2026-11-09_09-30" in the educator's time zone. */
+export function stamp(ts) {
+  let parts;
+  try {
+    parts = Object.fromEntries(new Intl.DateTimeFormat('en-AU', {
+      timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(ts)).map((p) => [p.type, p.value]));
+  } catch {
+    const iso = new Date(ts).toISOString();
+    return `${iso.slice(0, 10)}_${iso.slice(11, 13)}-${iso.slice(14, 16)}`;
+  }
+  return `${parts.year}-${parts.month}-${parts.day}_${parts.hour}-${parts.minute}`;
+}
+
+/** teacher-1_2026-11-09_09-30_TCHE2615 — who ran it, when it started, which class. */
+export function saveName(record) {
+  return `teacher-${record.teacherId || '1'}_${stamp(record.createdAt)}_${fileSafe(record.className, 'class')}`;
+}
+export const classFolder = (cls) => fileSafe(cls?.name, 'class');
+
+/** Every file of one activity's download, under `base/`. */
+function activityFiles({ record, cls, context }, base) {
   const files = [
     { name: `${base}/README.txt`, content: readme(record) },
     { name: `${base}/report.html`, content: reportHtml(record, cls, context) },
@@ -244,8 +268,35 @@ export function activityZip({ record, cls, context }) {
     for (const [key, name] of [['about', '01-about-the-class.md'], ['learned', '02-what-we-have-learned.md'], ['voice', '03-student-voice.md']]) {
       if (context.files?.[key]) files.push({ name: `${base}/context/${name}`, content: context.files[key] });
     }
+    if (context.updates?.length) {
+      files.push({ name: `${base}/context/updates.md`, content: context.updates.map((u) => `## ${new Date(u.at).toISOString().slice(0, 10)}\n\n${u.text}\n`).join('\n') });
+    }
   }
-  return { name: `${base}.zip`, buffer: createZip(files) };
+  return files;
+}
+
+export function activityZip({ record, cls, context }) {
+  const base = saveName(record);
+  return { name: `${base}.zip`, buffer: createZip(activityFiles({ record, cls, context }, base)) };
+}
+
+/** Every activity run with one class, one folder each, under the class's folder. */
+export function classZip({ cls, entries }) {
+  const root = classFolder(cls);
+  const files = [{
+    name: `${root}/README.txt`,
+    content: [
+      `Human or Not? — every activity run with ${cls.name}`,
+      '',
+      'One folder per activity, named teacher_date_time_class (times are local).',
+      'Inside each: report.html to start, then the data, analysis and overview.',
+      '',
+      ...entries.map(({ record }) => `${saveName(record)}  ${record.name} (${record.teacherName || `Teacher ${record.teacherId || 1}`}, ${record.rounds.length} rounds, ${record.status})`),
+      '',
+    ].join('\n'),
+  }];
+  for (const entry of entries) files.push(...activityFiles(entry, `${root}/${saveName(entry.record)}`));
+  return { name: `${root}_all-activities_${stamp(Date.now()).slice(0, 10)}.zip`, buffer: createZip(files) };
 }
 
 function readme(record) {
